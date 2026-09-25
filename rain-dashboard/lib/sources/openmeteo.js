@@ -157,7 +157,14 @@ function invalidateHourlyCache() {
   hourlyCacheStamps = null;
 }
 
-// mtime ของไฟล์ข้อมูลทุกปี — ถ้า backfill/งานอื่นเขียนไฟล์คนละ process
+// รายชื่อไฟล์ข้อมูลทุกปีที่มีอยู่จริง (hourly-<ปี>.json) — เรียงตามชื่อ = เรียงปี
+function listHourlyFiles() {
+  let entries = [];
+  try { entries = fs.readdirSync(config.dataDir); } catch (_) { return []; }
+  return entries.filter((n) => /^hourly-\d{4}\.json$/.test(n)).sort();
+}
+
+// mtime ทุกไฟล์ — ถ้า backfill/งานอื่นเขียนไฟล์คนละ process
 // cache ในหน่วยความจำจะรู้ตัวเองว่าล้าสมัย (ไม่ต้องรอ restart)
 function dataStamps(names) {
   return names.map((n) => {
@@ -166,13 +173,10 @@ function dataStamps(names) {
 }
 
 function readHourly() {
-  const thisYear = new Date().getFullYear();
-  const names = [];
-  for (let y = thisYear; y >= thisYear - 10; y--) names.push(`hourly-${y}.json`);
+  const names = listHourlyFiles();
   const stamps = dataStamps(names);
-  if (hourlyCache && hourlyCacheStamps && stamps.every((v, i) => v === hourlyCacheStamps[i])) {
-    return hourlyCache;
-  }
+  const stampKey = names.map((n, i) => `${n}:${stamps[i]}`).join('|');
+  if (hourlyCache && hourlyCacheStamps === stampKey) return hourlyCache;
   const rows = [];
   for (const n of names) {
     const data = store.readJson(n, null);
@@ -185,7 +189,7 @@ function readHourly() {
   }
   rows.sort((a, b) => (a.t < b.t ? -1 : 1));
   hourlyCache = rows;
-  hourlyCacheStamps = stamps;
+  hourlyCacheStamps = stampKey;
   return rows;
 }
 

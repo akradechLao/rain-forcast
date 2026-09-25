@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>เฝ้าระวังฝนแล้ง — สวนอุตสาหกรรมเครือสหพัฒน์ ศรีราชา</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <script>
+    try {
+      var _q = new URLSearchParams(location.search).get('theme');
+      var _t = (_q === 'light' || _q === 'dark') ? _q : localStorage.getItem('dashboardTheme');
+      document.documentElement.setAttribute('data-theme', _t === 'light' ? 'light' : 'dark');
+    } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon">🌵</span>
+      <div>
+        <h1>ระบบเฝ้าระวังฝนแล้ง (SPI)</h1>
+        <div class="sub" id="parkName">สวนอุตสาหกรรมเครือสหพัฒน์ ศรีราชา</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <div class="clock" id="clock">--:--:--</div>
+      <div class="refresh-info">
+        <span id="lastUpdated">กำลังโหลด...</span>
+        <span class="countdown" id="countdown"></span>
+      </div>
+      <button class="btn btn-ghost" id="btnRefresh" title="รีเฟรช">⟳ รีเฟรช</button>
+      <button class="btn btn-ghost" id="themeToggle" title="สลับธีมสว่าง/เข้ม">☀️ ธีมสว่าง</button>
+      <a class="btn btn-ghost" href="/" title="กลับหน้าเฝ้าระวังน้ำท่วม">◀ หน้าน้ำท่วม</a>
+    </div>
+  </header>
+
+  <div id="alertBanner" class="alert-banner hidden">
+    <span class="alert-icon">🌵</span>
+    <div id="alertBannerText"></div>
+    <button class="btn btn-ghost" id="btnDismissBanner">ปิด</button>
+  </div>
+
+  <div id="offlineBanner" class="offline-banner hidden">
+    เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — กำลังลองใหม่...
+  </div>
+
+  <main class="container">
+    <!-- ===== สถานะรวม ===== -->
+    <section class="drought-hero card" id="droughtHero">
+      <div class="hero-badge" id="heroBadge">–</div>
+      <div class="hero-body">
+        <div class="hero-title" id="heroTitle">กำลังคำนวณ...</div>
+        <div class="hero-desc" id="heroDesc">SPI จากข้อมูลฝนย้อนหลัง ~30 ปี (ERA5)</div>
+        <div class="hero-meta" id="heroMeta"></div>
+      </div>
+      <div class="hero-spi">
+        <div class="hero-spi-label">SPI-3 ปัจจุบัน</div>
+        <div class="hero-spi-value" id="heroSpi">–</div>
+      </div>
+    </section>
+
+    <!-- ===== KPI ===== -->
+    <section class="kpi-grid" id="kpiGrid">
+      <div class="card kpi">
+        <div class="kpi-label">SPI เดือนล่าสุด (1 เดือน)</div>
+        <div class="kpi-value"><span id="kpiSpi1">–</span></div>
+        <div class="kpi-note">ฝนเดือนนี้เทียบค่าเฉลี่ย 30 ปี</div>
+      </div>
+      <div class="card kpi kpi-accent">
+        <div class="kpi-label">SPI 3 เดือน (เกณฑ์แจ้งเตือน)</div>
+        <div class="kpi-value"><span id="kpiSpi3">–</span></div>
+        <div class="kpi-note">ต่ำกว่า -1.0 = เริ่มแล้ง · ต่ำกว่า -1.5 = แล้งรุนแรง</div>
+      </div>
+      <div class="card kpi">
+        <div class="kpi-label">SPI 6 เดือน (ฤดู)</div>
+        <div class="kpi-value"><span id="kpiSpi6">–</span></div>
+        <div class="kpi-note">ภาพรวมความชุ่มชื้นรายฤดู</div>
+      </div>
+      <div class="card kpi">
+        <div class="kpi-label">SPI 12 เดือน (รายปี)</div>
+        <div class="kpi-value"><span id="kpiSpi12">–</span></div>
+        <div class="kpi-note">น้ำต้นทุนระยะยาว</div>
+      </div>
+      <div class="card kpi">
+        <div class="kpi-label">ฝนเดือนนี้เทียบปกติ</div>
+        <div class="kpi-value"><span id="kpiPct">–</span><small>%</small></div>
+        <div class="kpi-note" id="kpiPctNote">–</div>
+      </div>
+      <div class="card kpi">
+        <div class="kpi-label">วันแห้งต่อเนื่อง</div>
+        <div class="kpi-value"><span id="kpiCdd">–</span><small>วัน</small></div>
+        <div class="kpi-note" id="kpiCddNote">ฝนน้อยกว่า 1 มม./วัน</div>
+      </div>
+    </section>
+
+    <!-- ===== SPI history ===== -->
+    <section class="card">
+      <div class="card-head">
+        <h2>ค่า SPI ย้อนหลัง 10 ปี (เลือกสเกล)</h2>
+        <div class="range-switch" id="spiSwitch">
+          <button data-scale="1" class="btn btn-sm">1 เดือน</button>
+          <button data-scale="3" class="btn btn-sm active">3 เดือน</button>
+          <button data-scale="6" class="btn btn-sm">6 เดือน</button>
+          <button data-scale="12" class="btn btn-sm">12 เดือน</button>
+        </div>
+      </div>
+      <div class="chart-wrap tall"><canvas id="chartSpi"></canvas></div>
+      <div class="map-note">เส้นประสีแดง = เกณฑ์เริ่มแล้ง (SPI -1) · เส้นประสีเข้ม = แล้งรุนแรง (SPI -2) · คิดตามเกณฑ์ SPI สากล (WMO) จากข้อมูล Open-Meteo (ERA5 reanalysis)</div>
+    </section>
+
+    <!-- ===== monthly vs normal / climatology ===== -->
+    <section class="grid-2">
+      <div class="card">
+        <div class="card-head"><h2>ฝนรายเดือนเทียบค่าปกติ (24 เดือนล่าสุด)</h2></div>
+        <div class="chart-wrap"><canvas id="chartMonthly"></canvas></div>
+        <div class="map-note" id="monthlyNote">แท่ง = ฝนจริง · เส้น = ค่าเฉลี่ย 30 ปี</div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>ค่าฝนปกติเฉลี่ยรายเดือน (30 ปี)</h2></div>
+        <div class="chart-wrap"><canvas id="chartClim"></canvas></div>
+        <div class="map-note">Climatology ใช้ย้อนหลัง 30 ปี (1996–2026) — เดือน ก.ย. สูงสุด · ธ.ค.–ก.พ. ต่ำสุด (ฤดูแล้ง)</div>
+      </div>
+    </section>
+
+    <!-- ===== notify ===== -->
+    <section class="card">
+      <div class="card-head">
+        <h2>การแจ้งเตือนฝนแล้ง</h2>
+        <button class="btn btn-sm" id="btnTestNotify">ส่งข้อความทดสอบ</button>
+      </div>
+      <div class="notify-wrap">
+        <div>
+          <h3>กฎที่ใช้งาน</h3>
+          <div id="droughtRules" class="rule-list">–</div>
+          <div class="map-note">แจ้งเตือนแสดงบนเว็บนี้ทันที · ช่องทาง LINE/อีเมลจะเปิดในเฟสถัดไป</div>
+        </div>
+        <div>
+          <h3>ประวัติการแจ้งเตือนล่าสุด</h3>
+          <div id="notifyHistory" class="history-list">–</div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      เกณฑ์ SPI (Standardized Precipitation Index) มาตรฐาน WMO · ข้อมูลฝน: Open-Meteo (ERA5 reanalysis) ย้อนหลัง 30 ปี ·
+      <a href="/">หน้าเฝ้าระวังน้ำท่วม</a> · <span id="footerTime"></span>
+    </footer>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="/drought.js"></script>
+</body>
+</html>

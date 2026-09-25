@@ -6,7 +6,7 @@
 const store = require('../lib/store');
 const openmeteo = require('../lib/sources/openmeteo');
 
-const YEARS = Math.max(1, Math.min(10, Number(process.argv[2]) || 5));
+const YEARS = Math.max(1, Math.min(40, Number(process.argv[2]) || 30));
 const CHUNK_DAYS = 180;
 const SLEEP_MS = 1200;
 
@@ -57,7 +57,7 @@ async function main() {
     await sleep(SLEEP_MS);
   }
 
-  const cutoff = fmtDate(new Date(Date.now() - 10 * 365 * 86400000)) + 'T00:00';
+  const cutoff = fmtDate(new Date(Date.now() - Math.max(10, YEARS + 1) * 365.25 * 86400000)) + 'T00:00';
   const kept = [...byTime.values()].filter((r) => r.t >= cutoff).sort((a, b) => (a.t < b.t ? -1 : 1));
   const byYear = new Map();
   for (const r of kept) {

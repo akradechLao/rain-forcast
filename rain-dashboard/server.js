@@ -9,7 +9,9 @@ const store = require('./lib/store');
 const openmeteo = require('./lib/sources/openmeteo');
 const tmd = require('./lib/sources/tmd');
 const radar = require('./lib/sources/radar');
+const sahapat = require('./lib/sources/sahapat');
 const notify = require('./lib/notify');
+const drought = require('./lib/drought');
 const internal = require('./lib/ingest/internal');
 const mqttIngest = require('./lib/ingest/mqttIngest');
 const waterLevel = require('./lib/ingest/waterLevel');
@@ -95,11 +97,26 @@ async function jobRadar() {
   }
 }
 
+async function jobSahapat() {
+  sourceStart('sahapat');
+  try {
+    const d = await sahapat.refresh();
+    sourceOk('sahapat', { stations: d.rain.length, online: d.rain.filter((s) => s.online).length });
+  } catch (e) {
+    sourceErr('sahapat', e);
+  }
+}
+
 // ---------- metrics + alerts ----------
+// ตีความเวลาแบบไทย (ICT/+07:00) ตรง ๆ — ไม่พึ่ง timezone ของเซิร์ฟ (UTC บน production)
+function parseIct(t) {
+  return Date.parse(t.length === 16 ? `${t}:00+07:00` : t);
+}
+
 function sumRange(series, fromMs, toMs = Date.now()) {
   let sum = 0;
   for (const p of series) {
-    const t = new Date(p.t).getTime();
+    const t = parseIct(p.t);
     if (t >= fromMs && t <= toMs) sum += p.mm;
   }
   return Math.round(sum * 10) / 10;
@@ -110,6 +127,8 @@ function computeMetrics() {
   const now = Date.now();
   const m = {
     rainHour: null,
+    rainHourAt: null,
+    rainToday: null,
     rain24h: null,
     rain7d: null,
     tmdRain24h: null,
@@ -124,8 +143,24 @@ function computeMetrics() {
     waterLevels: waterLevel.LEVELS,
   };
   if (series.length) {
-    const last = series[series.length - 1];
-    m.rainHour = last.mm;
+    // เวลาไทยตอนนี้ (รูปแบบ YYYY-MM-DDTHH:MM แบบไม่มี timezone ใช้เทียบ string ได้เลย)
+    const nowIct = new Date().toLocaleString('sv', { timeZone: 'Asia/Bangkok' }).slice(0, 16).replace(' ', 'T');
+    // ฝนชั่วโมงล่าสุด = ชั่วโมงที่ "ผ่านไปแล้ว" จริง (แถวท้ายสุดอาจเป็น forecast วันพรุ่งนี้)
+    for (let i = series.length - 1; i >= 0; i--) {
+      if (series[i].t <= nowIct) {
+        m.rainHour = series[i].mm;
+        m.rainHourAt = series[i].t;
+        break;
+      }
+    }
+    // ฝนสะสมวันนี้ (รีเซ็ตเที่ยงคืนเวลาไทย — ไม่รวมแถวพยากรณ์อนาคต)
+    const today = nowIct.slice(0, 10);
+    let todaySum = 0;
+    for (const p of series) {
+      if (p.t > nowIct) break;
+      if (p.t.slice(0, 10) === today) todaySum += p.mm;
+    }
+    m.rainToday = Math.round(todaySum * 10) / 10;
     m.rain24h = sumRange(series, now - 24 * 3600000);
     m.rain7d = sumRange(series, now - 7 * 86400000);
   }
@@ -157,6 +192,22 @@ function computeMetrics() {
       m.waterLevel = w.latest.level;
     }
   } catch (_) { /* water ไม่กระทบหลัก */ }
+  try {
+    const sg = sahapat.read();
+    if (sg && sg.rain.length) {
+      // ฝนจากเซนเซอร์จริงในสวนฯ — เอา RG-01 (สนามบิน) เป็นหลัก
+      const rg = sg.rain.find((s) => s.id === 'RG-01') || sg.rain.find((s) => s.online) || sg.rain[0];
+      m.rgStation = { id: rg.id, name: rg.name, online: rg.online, lastSeenAt: rg.lastSeenAt };
+      m.rgToday = rg.todayMm;
+      m.rgHour = rg.hourMm;
+      m.rgHourAt = rg.hourAt;
+      m.rgUpdatedAt = sg.updatedAt;
+    }
+  } catch (_) { /* sahapat ไม่กระทบหลัก */ }
+  try {
+    const d = drought.metrics();
+    if (d) Object.assign(m, d);
+  } catch (_) { /* drought ไม่กระทบหลัก */ }
   return m;
 }
 
@@ -289,6 +340,16 @@ async function handleApi(req, res, url) {
     return true;
   }
 
+  if (p === '/api/drought') {
+    const d = drought.get();
+    if (!d) {
+      sendJson(res, 503, { error: 'ข้อมูลฝนย้อนหลังยังไม่พอสำหรับคำนวณ SPI (ต้องการอย่างน้อย 2 ปี)' });
+      return true;
+    }
+    sendJson(res, 200, d);
+    return true;
+  }
+
   if (p === '/api/series') {
     const days = Math.min(3650, Math.max(1, Number(url.searchParams.get('days')) || 14));
     const all = openmeteo.readHourly();
@@ -377,6 +438,12 @@ async function handleApi(req, res, url) {
       configured: Boolean(config.water.url && config.water.topic),
       generatedAt: new Date().toISOString(),
     });
+    return true;
+  }
+
+  if (p === '/api/sahapat') {
+    const d = sahapat.read();
+    sendJson(res, 200, d || { rain: [], water: null, note: 'ยังโหลดไม่เสร็จ', fetchedAt: null });
     return true;
   }
 
@@ -496,6 +563,8 @@ function startJobs() {
   interval(jobMeteo, config.refresh.meteoMs, 'openmeteo');
   interval(jobTmd, config.refresh.tmdMs, 'tmd');
   interval(jobRadar, config.refresh.radarMs, 'radar');
+  // แดชบอร์ดสวนฯ refresh เองทุก 60 วิ — ดึงตามจังหวะเดียวกัน
+  interval(jobSahapat, 60 * 1000, 'sahapat');
   // ประเมินกฎเตือนทุก 2 นาที (รวมกรณีเซนเซอร์ขาดสัญญาณ)
   interval(async () => { await evaluateAlerts(); }, 2 * 60 * 1000, 'alerts');
 }

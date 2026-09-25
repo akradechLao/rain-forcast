@@ -345,3 +345,42 @@ tr:hover td { background: rgba(56, 189, 248, 0.06); }
   border: 1px solid var(--line);
 }
 .leaflet-popup-content { font-size: 13px; }
+
+/* ===== หน้าฝนแล้ง (drought.html) ===== */
+.drought-hero {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 22px;
+  margin-bottom: 16px;
+}
+.hero-badge {
+  font-size: 20px;
+  font-weight: 700;
+  padding: 12px 20px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+.hero-body { flex: 1; min-width: 0; }
+.hero-title { font-size: 17px; font-weight: 700; }
+.hero-desc { color: var(--muted); font-size: 13.5px; margin-top: 4px; }
+.hero-meta { color: var(--muted); font-size: 12.5px; margin-top: 8px; line-height: 1.7; }
+.hero-spi { text-align: center; min-width: 130px; }
+.hero-spi-label { font-size: 12.5px; color: var(--muted); }
+.hero-spi-value { font-size: 46px; font-weight: 700; line-height: 1.1; }
+.notify-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.notify-wrap h3 { font-size: 13.5px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+.rule-row, .history-row {
+  font-size: 13px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  background: var(--panel2);
+  line-height: 1.5;
+}
+.history-drought { border-color: #f59e0b66; }
+@media (max-width: 900px) {
+  .drought-hero { flex-direction: column; align-items: flex-start; }
+  .notify-wrap { grid-template-columns: 1fr; }
+}

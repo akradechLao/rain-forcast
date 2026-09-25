@@ -13,6 +13,8 @@ const DEFAULT_RULES = [
   { id: 'rtmd', label: 'ฝนสะสม 24 ชม. (สถานีราชการใกล้สุด)', metric: 'tmdRain24h', op: '>', threshold: 60, unit: 'มม.', enabled: false },
   { id: 'rstale', label: 'เซนเซอร์ภายในขาดสัญญาณ', metric: 'internalStaleMin', op: '>', threshold: 15, unit: 'นาที', enabled: true },
   { id: 'rwater', label: 'ระดับน้ำเข้าใกล้ขอบน้ำล้น (spill way)', metric: 'waterLevel', op: '>=', threshold: 2, unit: 'ระดับ', enabled: true },
+  { id: 'rd1', label: 'เริ่มแล้ง (SPI-3 ≤ -1.0)', metric: 'droughtSpi3', op: '<=', threshold: -1, unit: 'SPI', enabled: true },
+  { id: 'rd2', label: 'แล้งรุนแรง (SPI-3 ≤ -1.5)', metric: 'droughtSpi3', op: '<=', threshold: -1.5, unit: 'SPI', enabled: true },
 ];
 
 function loadRules() {
@@ -54,6 +56,7 @@ function evaluate(metrics, rules = loadRules()) {
     if (r.op === '>') hit = val > r.threshold;
     else if (r.op === '>=') hit = val >= r.threshold;
     else if (r.op === '<') hit = val < r.threshold;
+    else if (r.op === '<=') hit = val <= r.threshold;
     if (hit) triggered.push({ ...r, value: val });
   }
   return triggered;
@@ -67,8 +70,9 @@ function fmtVal(v, unit) {
 
 function buildMessage(events, metrics, parkName) {
   const now = new Date();
+  const drought = events.some((e) => e.metric && e.metric.startsWith('drought'));
   const lines = [
-    `⚠️ เฝ้าระวังน้ำท่วม — ${parkName}`,
+    drought ? `🌿 แจ้งเตือนฝนแล้ง — ${parkName}` : `⚠️ เฝ้าระวังน้ำท่วม — ${parkName}`,
     `เวลา ${now.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'short', timeStyle: 'short' })}`,
     '',
     'เกณฑ์ที่ถูกกระตุ้น:',
@@ -86,6 +90,11 @@ function buildMessage(events, metrics, parkName) {
   if (metrics.internalRain24h !== null && metrics.internalRain24h !== undefined) lines.push(`• ฝนจากเซนเซอร์ภายใน (24 ชม.): ${fmtVal(metrics.internalRain24h, 'มม.')}`);
   if (metrics.waterLevel !== null && metrics.waterLevel !== undefined) {
     lines.push(`• ระดับน้ำล่าสุด: ระดับ ${metrics.waterLevel} (${water.describe(Number(metrics.waterLevel))})`);
+  }
+  if (metrics.droughtSpi3 !== null && metrics.droughtSpi3 !== undefined) {
+    lines.push(`• SPI-1/3/6/12: ${fmtVal(metrics.droughtSpi1)} / ${fmtVal(metrics.droughtSpi3)} / ${fmtVal(metrics.droughtSpi6)} / ${fmtVal(metrics.droughtSpi12)}`);
+    if (metrics.droughtCdd !== null && metrics.droughtCdd !== undefined) lines.push(`• วันแห้งต่อเนื่อง: ${fmtVal(metrics.droughtCdd, 'วัน')}`);
+    if (metrics.droughtPct !== null && metrics.droughtPct !== undefined) lines.push(`• ฝนเดือนนี้เทียบปกติ: ${fmtVal(metrics.droughtPct, '%')}`);
   }
   lines.push('');
   lines.push('เปิดดูแดชบอร์ด: ' + (process.env.DASHBOARD_URL || '(ตั้ง DASHBOARD_URL ใน .env)'));
@@ -165,9 +174,11 @@ async function dispatch({ events, metrics, parkName, mode = 'alert' }) {
     return { ok: false, skipped: true, reason: 'อยู่ในช่วง cooldown' };
   }
   const text = buildMessage(events, metrics, parkName);
-  const subject = `⚠️ แจ้งเตือนน้ำฝน ${parkName}`;
+  const isDrought = events.some((e) => e.metric && e.metric.startsWith('drought'));
+  const subject = isDrought ? `🌿 แจ้งเตือนฝนแล้ง ${parkName}` : `⚠️ แจ้งเตือนน้ำฝน ${parkName}`;
   const [line, email] = await Promise.all([sendLine(text), sendEmail(subject, text)]);
-  if (mode === 'alert' && (line.ok || email.ok)) markSent(key);
+  // cooldown กันทั้งส่งซ้ำและกัน history รั่ว — ต่อให้ยังไม่มี channel ใดส่งได้ก็ต้อง mark
+  if (mode === 'alert') markSent(key);
   store.appendJsonl('notify-history.jsonl', {
     at: new Date().toISOString(),
     mode,

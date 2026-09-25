@@ -31,6 +31,7 @@
         <span id="lastUpdated">กำลังโหลด...</span>
         <span class="countdown" id="countdown"></span>
       </div>
+      <a class="btn btn-ghost" href="/drought.html" title="หน้าเฝ้าระวังฝนแล้ง (SPI)">🌵 ฝนแล้ง</a>
       <button class="btn btn-ghost" id="btnRefresh" title="รีเฟรช">⟳ รีเฟรช</button>
       <button class="btn btn-ghost" id="themeToggle" title="สลับธีมสว่าง/เข้ม">☀️ ธีมสว่าง</button>
       <button class="btn btn-ghost" id="btnFullscreen" title="เต็มหน้าจอ">⛶</button>
@@ -54,6 +55,16 @@
         <div class="kpi-label">ฝนชั่วโมงล่าสุด</div>
         <div class="kpi-value"><span id="kpiHour">–</span><small>มม.</small></div>
         <div class="kpi-note" id="kpiHourNote">ณ เวลาปัจจุบัน</div>
+      </div>
+      <div class="card kpi">
+        <div class="kpi-label">ฝนสะสมวันนี้</div>
+        <div class="kpi-value"><span id="kpiToday">–</span><small>มม.</small></div>
+        <div class="kpi-note">ตั้งแต่เที่ยงคืน (รีเซ็ตรายวัน)</div>
+      </div>
+      <div class="card kpi">
+        <div class="kpi-label">ฝนสถานีสวนฯ วันนี้ (RG จริง)</div>
+        <div class="kpi-value"><span id="kpiRg">–</span><small>มม.</small></div>
+        <div class="kpi-note" id="kpiRgNote">สถานีสนามบิน (RG-01)</div>
       </div>
       <div class="card kpi">
         <div class="kpi-label">ฝนสะสม 24 ชั่วโมง</div>
@@ -168,6 +179,21 @@
 
     <!-- ===== Stations table + warnings ===== -->
     <section class="grid-2">
+      <div class="card span-2">
+        <div class="card-head">
+          <h2>สถานีฝนในสวนฯ — เซนเซอร์จริง (rain-sahapat)</h2>
+          <div class="map-note" id="sahapatNote">–</div>
+        </div>
+        <div class="table-wrap">
+          <table id="sahapatTable">
+            <thead>
+              <tr><th>สถานี</th><th>ฝนชั่วโมงล่าสุด</th><th>ฝนวันนี้</th><th>สถานะ</th><th>ข้อมูลล่าสุด</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-head"><h2>ตารางสถานีตรวจอากาศ (กรมอุตุนิยมวิทยา)</h2></div>
         <div class="table-wrap">
@@ -244,6 +270,7 @@
 
     <footer class="footer">
       แหล่งข้อมูล: กรมอุตุนิยมวิทยา (TMD API) · Open-Meteo · เรดาร์ฝนหลวง (กรมฝนหลวงและการบินเกษตร) · <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a> ·
+      สถานีฝนสวนฯ เครือสหพัฒน์ (RG-01/02/03) ·
       ข้อมูลเซนเซอร์ภายในสวนฯ — อัปเดตอัตโนมัติทุก 5 นาที · <span id="footerTime"></span>
     </footer>
   </main>

@@ -177,7 +177,7 @@ async function refreshAll(manual = false) {
   state.nextRefreshAt = Date.now() + (state.config?.refresh?.tmdMs || 300000);
   $('#btnRefresh').disabled = true;
   try {
-    await Promise.allSettled([loadKpi(), loadSeries(), loadStations(), loadRadar(), loadWater(), loadWarnings(), loadSources(), loadNotify(), loadRules()]);
+    await Promise.allSettled([loadKpi(), loadSeries(), loadStations(), loadSahapat(), loadRadar(), loadWater(), loadWarnings(), loadSources(), loadNotify(), loadRules()]);
     $('#lastUpdated').textContent = 'อัปเดตล่าสุด ' + new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' });
     $('#offlineBanner').classList.add('hidden');
   } catch (e) {
@@ -194,6 +194,14 @@ async function loadKpi() {
   const { metrics } = await api('/api/kpi');
   state.metrics = metrics;
   $('#kpiHour').textContent = fmt(metrics.rainHour);
+  $('#kpiHourNote').textContent = metrics.rainHourAt
+    ? `ชั่วโมง ${metrics.rainHourAt.slice(11, 16)} น. ของวัน ${metrics.rainHourAt.slice(0, 10)}`
+    : 'ณ เวลาปัจจุบัน';
+  $('#kpiToday').textContent = fmt(metrics.rainToday);
+  $('#kpiRg').textContent = fmt(metrics.rgToday);
+  $('#kpiRgNote').textContent = metrics.rgStation
+    ? `${metrics.rgStation.name} · ชั่วโมงนี้ ${fmt(metrics.rgHour)} มม. · ${metrics.rgStation.online ? 'ออนไลน์' : 'ออฟไลน์'}`
+    : 'ยังไม่มีข้อมูลสถานีสวนฯ';
   $('#kpi24h').textContent = fmt(metrics.rain24h);
   $('#kpi7d').textContent = fmt(metrics.rain7d);
   $('#kpiInternal').textContent = fmt(metrics.internalRain24h);
@@ -233,6 +241,7 @@ function evaluateLocal() {
     if (r.op === '>') hit = v > r.threshold;
     else if (r.op === '>=') hit = v >= r.threshold;
     else if (r.op === '<') hit = v < r.threshold;
+    else if (r.op === '<=') hit = v <= r.threshold;
     if (hit) out.push({ ...r, value: v });
   }
   return out;
@@ -482,6 +491,38 @@ async function loadStations() {
   renderStationTable(data);
   renderStationsChart(data);
   updateStationMarkers(data);
+}
+
+async function loadSahapat() {
+  const data = await api('/api/sahapat');
+  renderSahapatTable(data);
+}
+
+function renderSahapatTable(data) {
+  const tbody = $('#sahapatTable tbody');
+  const note = $('#sahapatNote');
+  if (!data || !data.rain || !data.rain.length) {
+    tbody.innerHTML = '<tr><td colspan="5">ยังไม่มีข้อมูลสถานี (กำลังโหลด...)</td></tr>';
+    if (note) note.textContent = (data && data.note) || '–';
+    return;
+  }
+  tbody.innerHTML = data.rain.map((s) => {
+    const badge = s.online
+      ? '<span class="badge badge-ok">ออนไลน์</span>'
+      : '<span class="badge badge-danger">ออฟไลน์</span>';
+    return `<tr>
+      <td>${s.name} <span style="color:var(--muted)">(${s.id})</span></td>
+      <td class="num">${fmt(s.hourMm)}${s.hourAt ? ` <span style="color:var(--muted)">น. ${s.hourAt.slice(11, 16)}</span>` : ''}</td>
+      <td class="num"><b>${fmt(s.todayMm)}</b></td>
+      <td>${badge}</td>
+      <td>${fmtTime(s.lastSeenAt)}</td>
+    </tr>`;
+  }).join('');
+  if (note) {
+    note.textContent = data.updatedAt
+      ? `อัปเดต ${fmtTime(data.updatedAt)} · เว็บต้นทางรีเฟรชทุก ${data.refreshSeconds} วิ`
+      : '–';
+  }
 }
 
 function renderStationTable(data) {
@@ -746,6 +787,7 @@ async function loadSources() {
   const names = {
     openmeteo: 'Open-Meteo (ย้อนหลัง+พยากรณ์)',
     tmd: 'กรมอุตุนิยมวิทยา (สถานีฝน)',
+    sahapat: 'สถานีฝนสวนฯ (RG จริง)',
     radar: 'เรดาร์ (RainViewer+ฝนหลวง)',
     alerts: 'ระบบประเมินแจ้งเตือน',
   };
@@ -753,7 +795,7 @@ async function loadSources() {
     const ok = s.ok;
     const cls = ok ? 'dot-ok' : 'dot-err';
     const meta = ok
-      ? `ล่าสุด ${fmtTime(s.lastOkAt)}${s.stations ? ` · ${s.stations} สถานี` : ''}${s.frames ? ` · ${s.frames} เฟรม` : ''}`
+      ? `ล่าสุด ${fmtTime(s.lastOkAt)}${s.stations ? ` · ${s.stations} สถานี` : ''}${s.online !== undefined ? ` · ออนไลน์ ${s.online}` : ''}${s.frames ? ` · ${s.frames} เฟรม` : ''}`
       : `ผิดพลาด: ${s.lastError || 'ไม่ทราบสาเหตุ'} (${fmtTime(s.failedAt)})`;
     return `<div class="source-row"><span class="dot ${cls}"></span><span class="source-name">${names[s.name] || s.name}</span><span class="source-meta">${meta}</span></div>`;
   });
