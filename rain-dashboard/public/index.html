@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>เฝ้าระวังน้ำท่วม — สวนอุตสาหกรรมเครือสหพัฒน์ ศรีราชา</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon">🌧</span>
+      <div>
+        <h1>ระบบเฝ้าระวังน้ำท่วมจากปริมาณน้ำฝน</h1>
+        <div class="sub" id="parkName">สวนอุตสาหกรรมเครือสหพัฒน์ ศรีราชา</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <div class="clock" id="clock">--:--:--</div>
+      <div class="refresh-info">
+        <span id="lastUpdated">กำลังโหลด...</span>
+        <span class="countdown" id="countdown"></span>
+      </div>
+      <button class="btn" id="btnRefresh" title="รีเฟรช">⟳ รีเฟรช</button>
+      <button class="btn btn-ghost" id="btnFullscreen" title="เต็มหน้าจอ">⛶</button>
+    </div>
+  </header>
+
+  <div id="alertBanner" class="alert-banner hidden">
+    <span class="alert-icon">⚠️</span>
+    <div id="alertBannerText"></div>
+    <button class="btn btn-ghost" id="btnDismissBanner">ปิด</button>
+  </div>
+
+  <div id="offlineBanner" class="offline-banner hidden">
+    เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — กำลังลองใหม่...
+  </div>
+
+  <main class="container">
+    <!-- ===== KPI ===== -->
+    <section class="kpi-grid" id="kpiGrid">
+      <div class="card kpi">
+        <div class="kpi-label">ฝนชั่วโมงล่าสุด</div>
+        <div class="kpi-value"><span id="kpiHour">–</span><small>มม.</small></div>
+        <div class="kpi-note" id="kpiHourNote">ณ เวลาปัจจุบัน</div>
+      </div>
+      <div class="card kpi">
+        <div class="kpi-label">ฝนสะสม 24 ชั่วโมง</div>
+        <div class="kpi-value"><span id="kpi24h">–</span><small>มม.</small></div>
+        <div class="kpi-note" id="kpi24hNote">พื้นที่สวนฯ (แบบจำลอง)</div>
+      </div>
+      <div class="card kpi kpi-accent">
+        <div class="kpi-label">ฝนสะสม 7 วัน (ตั้งแต่อาทิตย์ที่แล้ว)</div>
+        <div class="kpi-value"><span id="kpi7d">–</span><small>มม.</small></div>
+        <div class="kpi-note" id="kpi7dNote">รวมย้อนหลัง + ต่อเนื่อง</div>
+      </div>
+      <div class="card kpi">
+        <div class="kpi-label">ฝนจากเซนเซอร์ภายใน 24 ชม.</div>
+        <div class="kpi-value"><span id="kpiInternal">–</span><small>มม.</small></div>
+        <div class="kpi-note" id="kpiInternalNote">–</div>
+      </div>
+      <div class="card kpi">
+        <div class="kpi-label">สถานีราชการใกล้สุด (ฝน 24 ชม.)</div>
+        <div class="kpi-value"><span id="kpiTmd">–</span><small>มม.</small></div>
+        <div class="kpi-note" id="kpiTmdNote">–</div>
+      </div>
+      <div class="card kpi">
+        <div class="kpi-label">สถานะแหล่งข้อมูล</div>
+        <div class="kpi-value"><span id="kpiSources">–</span></div>
+        <div class="kpi-note" id="kpiSourcesNote">–</div>
+      </div>
+    </section>
+
+    <!-- ===== Charts ===== -->
+    <section class="grid-2">
+      <div class="card span-2">
+        <div class="card-head">
+          <h2>ปริมาณน้ำฝนรายชั่วโมง + ฝนสะสม (ย้อนหลัง → ปัจจุบัน → พยากรณ์)</h2>
+          <div class="legend">
+            <span class="lg lg-past">ย้อนหลัง/วัดได้</span>
+            <span class="lg lg-fc">พยากรณ์</span>
+            <span class="lg lg-cum">ฝนสะสม</span>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartHourly"></canvas></div>
+        <div class="range-switch" id="rangeSwitch">
+          <button data-days="3" class="btn btn-sm">3 วัน</button>
+          <button data-days="7" class="btn btn-sm active">7 วัน</button>
+          <button data-days="14" class="btn btn-sm">14 วัน</button>
+          <button data-days="30" class="btn btn-sm">30 วัน</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>ฝนสะสมรายวัน: แหล่งภายนอก vs เซนเซอร์ภายใน</h2></div>
+        <div class="chart-wrap"><canvas id="chartDaily"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>สถานีราชการใกล้เคียง — ฝนสะสม 24 ชม.</h2></div>
+        <div class="chart-wrap"><canvas id="chartStations"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ===== Map + Radar ===== -->
+    <section class="grid-map">
+      <div class="card">
+        <div class="card-head">
+          <h2>แผนที่สถานการณ์ + เรดาร์ฝน</h2>
+          <label class="switch"><input type="checkbox" id="toggleRadar" checked> ชั้นเรดาร์</label>
+        </div>
+        <div id="map"></div>
+        <div class="map-note" id="mapNote">เวลาเรดาร์: –</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>ภาพเรดาร์ฝนหลวง — สถานีสัตหีบ</h2>
+          <div class="range-switch">
+            <button class="btn btn-sm" id="btnRadarPlay">▶ เล่น</button>
+          </div>
+        </div>
+        <div class="radar-frame">
+          <img id="radarImg" alt="เรดาร์ฝนหลวง" />
+          <div class="radar-time" id="radarTime">กำลังโหลด...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Stations table + warnings ===== -->
+    <section class="grid-2">
+      <div class="card">
+        <div class="card-head"><h2>ตารางสถานีตรวจอากาศ (กรมอุตุนิยมวิทยา)</h2></div>
+        <div class="table-wrap">
+          <table id="stationTable">
+            <thead>
+              <tr><th>สถานี</th><th>ระยะทาง</th><th>ฝน 3 ชม.</th><th>ฝน 24 ชม.</th><th>เวลาตรวจ</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>ประกาศเตือน / สถานะแหล่งข้อมูล</h2></div>
+        <div id="warningsBox" class="warnings">– ไม่มีประกาศเตือนใหม่ –</div>
+        <div id="sourcesBox" class="sources-box"></div>
+      </div>
+    </section>
+
+    <!-- ===== Alerts + channels ===== -->
+    <section class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <h2>กฎการแจ้งเตือน (แก้ไขได้)</h2>
+          <button class="btn btn-sm" id="btnSaveRules">💾 บันทึกกฎ</button>
+        </div>
+        <div id="rulesBox" class="rules-box">กำลังโหลด...</div>
+        <div class="hint">การแจ้งเตือนจะส่งเมื่อค่าเกินเกณฑ์ (มี cooldown กันสแปม) — เปิดใช้ LINE/อีเมลในไฟล์ <code>.env</code></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>ช่องทางแจ้งเตือน</h2>
+          <button class="btn btn-sm" id="btnTestNotify">✉️ ทดสอบส่ง</button>
+        </div>
+        <div id="channelsBox" class="channels-box">กำลังโหลด...</div>
+        <h3 class="mini-title">ประวัติการส่งล่าสุด</h3>
+        <div id="notifyHistory" class="notify-history">–</div>
+      </div>
+    </section>
+
+    <!-- ===== Internal ingest ===== -->
+    <section class="grid-2">
+      <div class="card">
+        <div class="card-head"><h2>ข้อมูลเซนเซอร์ภายใน (รับเข้าระบบ)</h2></div>
+        <div class="ingest-info" id="ingestInfo">–</div>
+        <div class="ingest-actions">
+          <label class="btn btn-sm file-btn">
+            📄 นำเข้า CSV
+            <input type="file" id="csvFile" accept=".csv,text/csv" hidden>
+          </label>
+          <span class="hint-inline">รูปแบบ: <code>timestamp,mm</code> ต่อแถว</span>
+        </div>
+        <div class="hint">
+          ช่องทาง MQTT/HTTP POST พร้อมใช้งาน — รายละเอียดใน README และ <code>.env</code>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>ฝนรายวันย้อนหลัง (กราฟสะสม)</h2></div>
+        <div class="chart-wrap"><canvas id="chartCumDaily"></canvas></div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      แหล่งข้อมูล: กรมอุตุนิยมวิทยา (TMD API) · Open-Meteo · เรดาร์ฝนหลวง (กรมฝนหลวงและการบินเกษตร) · RainViewer ·
+      ข้อมูลเซนเซอร์ภายในสวนฯ — อัปเดตอัตโนมัติทุก 5 นาที · <span id="footerTime"></span>
+    </footer>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
