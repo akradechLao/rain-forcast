@@ -1,4 +1,6 @@
 'use strict';
+const fs = require('fs');
+const path = require('path');
 const config = require('../config');
 const store = require('../store');
 
@@ -148,26 +150,42 @@ async function refresh() {
 // อ่านข้อมูลรวมทุกปี (แยกไฟล์ hourly-<year>.json) + cache ในหน่วยความจำ
 // (5 ปี ≈ 44,000 แถว — ไม่ parse ไฟล์ใหม่ทุก request)
 let hourlyCache = null;
+let hourlyCacheStamps = null;
 
 function invalidateHourlyCache() {
   hourlyCache = null;
+  hourlyCacheStamps = null;
+}
+
+// mtime ของไฟล์ข้อมูลทุกปี — ถ้า backfill/งานอื่นเขียนไฟล์คนละ process
+// cache ในหน่วยความจำจะรู้ตัวเองว่าล้าสมัย (ไม่ต้องรอ restart)
+function dataStamps(names) {
+  return names.map((n) => {
+    try { return fs.statSync(path.join(config.dataDir, n)).mtimeMs; } catch (_) { return 0; }
+  });
 }
 
 function readHourly() {
-  if (hourlyCache) return hourlyCache;
   const thisYear = new Date().getFullYear();
+  const names = [];
+  for (let y = thisYear; y >= thisYear - 10; y--) names.push(`hourly-${y}.json`);
+  const stamps = dataStamps(names);
+  if (hourlyCache && hourlyCacheStamps && stamps.every((v, i) => v === hourlyCacheStamps[i])) {
+    return hourlyCache;
+  }
   const rows = [];
-  for (let y = thisYear; y >= thisYear - 10; y--) {
-    const data = store.readJson(`hourly-${y}.json`, null);
+  for (const n of names) {
+    const data = store.readJson(n, null);
     if (Array.isArray(data) && data.length) {
       rows.push(...data);
     } else {
-      const jl = store.readJsonl(`hourly-${y}.jsonl`);
+      const jl = store.readJsonl(n.replace('.json', '.jsonl'));
       if (jl.length) rows.push(...jl);
     }
   }
   rows.sort((a, b) => (a.t < b.t ? -1 : 1));
   hourlyCache = rows;
+  hourlyCacheStamps = stamps;
   return rows;
 }
 
