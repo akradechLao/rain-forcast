@@ -8,6 +8,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
+  <script>
+    try {
+      var _t = localStorage.getItem('dashboardTheme');
+      document.documentElement.setAttribute('data-theme', _t === 'light' ? 'light' : 'dark');
+    } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -24,7 +30,8 @@
         <span id="lastUpdated">กำลังโหลด...</span>
         <span class="countdown" id="countdown"></span>
       </div>
-      <button class="btn" id="btnRefresh" title="รีเฟรช">⟳ รีเฟรช</button>
+      <button class="btn btn-ghost" id="btnRefresh" title="รีเฟรช">⟳ รีเฟรช</button>
+      <button class="btn btn-ghost" id="themeToggle" title="สลับธีมสว่าง/เข้ม">☀️ ธีมสว่าง</button>
       <button class="btn btn-ghost" id="btnFullscreen" title="เต็มหน้าจอ">⛶</button>
     </div>
   </header>
@@ -50,7 +57,7 @@
       <div class="card kpi">
         <div class="kpi-label">ฝนสะสม 24 ชั่วโมง</div>
         <div class="kpi-value"><span id="kpi24h">–</span><small>มม.</small></div>
-        <div class="kpi-note" id="kpi24hNote">พื้นที่สวนฯ (แบบจำลอง)</div>
+        <div class="kpi-note" id="kpi24hNote">พื้นที่สวนฯ (Open-Meteo)</div>
       </div>
       <div class="card kpi kpi-accent">
         <div class="kpi-label">ฝนสะสม 7 วัน (ตั้งแต่อาทิตย์ที่แล้ว)</div>

@@ -24,3 +24,5 @@ npm start        # → http://localhost:8080
 ตั้งค่าเพิ่มเติม (MQTT, LINE, อีเมล, คีย์หน่วยงาน): คัดลอก `.env.example` เป็น `.env` แล้วแก้ค่า
 
 รายละเอียดทั้งหมด: [rain-dashboard/README.md](rain-dashboard/README.md)
+
+Deploy ขึ้นเซิร์ฟเวอร์ (AApanel + Cloudflare → `saha-rain-watch.<โดเมน>`): [rain-dashboard/docs/deploy-aapanel.md](rain-dashboard/docs/deploy-aapanel.md)

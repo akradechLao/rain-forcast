@@ -75,12 +75,22 @@ async function jobTmd() {
 
 async function jobRadar() {
   sourceStart('radar');
-  try {
-    const [rv, rr] = await Promise.all([radar.fetchRainViewer(), radar.fetchRoyalRain()]);
-    cache.radar = { rainviewer: rv, royalrain: rr, fetchedAt: new Date().toISOString() };
-    sourceOk('radar', { frames: rr.frames.length });
-  } catch (e) {
-    sourceErr('radar', e);
+  const [rv, rr] = await Promise.allSettled([radar.fetchRainViewer(), radar.fetchRoyalRain()]);
+  const prev = cache.radar || {};
+  const errors = {};
+  if (rv.status === 'rejected') errors.rainviewer = String((rv.reason && rv.reason.message) || rv.reason).slice(0, 200);
+  if (rr.status === 'rejected') errors.royalrain = String((rr.reason && rr.reason.message) || rr.reason).slice(0, 200);
+  cache.radar = {
+    rainviewer: rv.status === 'fulfilled' ? rv.value : prev.rainviewer || null,
+    royalrain: rr.status === 'fulfilled' ? rr.value : prev.royalrain || null,
+    errors,
+    fetchedAt: new Date().toISOString(),
+  };
+  if (rv.status === 'fulfilled' || rr.status === 'fulfilled') {
+    const frames = (cache.radar.royalrain && cache.radar.royalrain.frames ? cache.radar.royalrain.frames.length : 0);
+    sourceOk('radar', { frames, partial: Object.keys(errors).length > 0 });
+  } else {
+    sourceErr('radar', { message: errors.rainviewer || errors.royalrain || 'radar fetch failed' });
   }
 }
 

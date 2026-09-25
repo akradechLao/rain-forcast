@@ -4,11 +4,31 @@
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 
-async function api(path, opts = {}) {
-  const res = await fetch(path, {
-    headers: opts.body && !(opts.body instanceof FormData) ? { 'content-type': 'application/json' } : undefined,
-    ...opts,
-  });
+const TOKEN_KEY = 'internalToken';
+
+function authHeaders() {
+  try {
+    const t = localStorage.getItem(TOKEN_KEY);
+    return t ? { 'x-internal-token': t } : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+async function api(path, opts = {}, retried = false) {
+  const headers = {
+    ...(opts.body && !(opts.body instanceof FormData) ? { 'content-type': 'application/json' } : {}),
+    ...authHeaders(),
+    ...(opts.headers || {}),
+  };
+  const res = await fetch(path, { ...opts, headers });
+  if (res.status === 401 && !retried) {
+    const t = window.prompt('ระบบเปิดการป้องกัน INTERNAL_TOKEN ไว้\nกรุณาใส่รหัส (INTERNAL_TOKEN ใน .env) เพื่อดำเนินการต่อ:');
+    if (t && t.trim()) {
+      try { localStorage.setItem(TOKEN_KEY, t.trim()); } catch (_) {}
+      return api(path, opts, true);
+    }
+  }
   if (!res.ok) throw new Error(`${path} → HTTP ${res.status}`);
   const txt = await res.text();
   return txt ? JSON.parse(txt) : null;
@@ -46,15 +66,30 @@ const state = {
 const hasChart = typeof Chart !== 'undefined';
 const hasLeaflet = typeof L !== 'undefined';
 
+const THEME_KEY = 'dashboardTheme';
+function currentTheme() {
+  try { return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'; } catch (_) { return 'dark'; }
+}
+function setThemeButton() {
+  const b = $('#themeToggle');
+  if (b) b.textContent = currentTheme() === 'light' ? '🌙 ธีมเข้ม' : '☀️ ธีมสว่าง';
+}
+function toggleTheme() {
+  try { localStorage.setItem(THEME_KEY, currentTheme() === 'light' ? 'dark' : 'light'); } catch (_) {}
+  location.reload();
+}
+
 if (hasChart) {
-  Chart.defaults.color = '#93a4c3';
-  Chart.defaults.borderColor = '#22304f';
+  const light = currentTheme() === 'light';
+  Chart.defaults.color = light ? '#475569' : '#93a4c3';
+  Chart.defaults.borderColor = light ? '#d7e0ec' : '#22304f';
   Chart.defaults.font.family = "'Sarabun', sans-serif";
 }
 
 // ---------------- boot ----------------
 async function init() {
   bindUI();
+  setThemeButton();
   startClock();
   try {
     state.config = await api('/api/config');
@@ -70,6 +105,10 @@ async function init() {
 
 function bindUI() {
   $('#btnRefresh').addEventListener('click', () => refreshAll(true));
+  $('#themeToggle').addEventListener('click', toggleTheme);
+  $('#radarImg').addEventListener('error', () => {
+    $('#radarTime').textContent = 'โหลดภาพเรดาร์ไม่สำเร็จ — จะลองใหม่ในการรีเฟรชถัดไป';
+  });
   $('#btnFullscreen').addEventListener('click', () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
@@ -131,7 +170,9 @@ async function loadKpi() {
   $('#kpiInternal').textContent = fmt(metrics.internalRain24h);
   $('#kpiInternalNote').textContent = metrics.internalDemo
     ? 'โหมดข้อมูลจำลอง (ยังไม่รับเซนเซอร์จริง)'
-    : `ล่าสุด ${fmtTime(metrics.internalLastAt)}${metrics.internalStaleMin !== null ? ` (ขาดสัญญาณ ${metrics.internalStaleMin} นาที)` : ''}`;
+    : metrics.internalLastAt
+      ? `ล่าสุด ${fmtTime(metrics.internalLastAt)}${metrics.internalStaleMin !== null ? ` (ขาดสัญญาณ ${metrics.internalStaleMin} นาที)` : ''}`
+      : 'ยังไม่มีข้อมูลเซนเซอร์จริง';
   $('#kpiTmd').textContent = fmt(metrics.tmdRain24h);
   $('#kpiTmdNote').textContent = metrics.tmdStation
     ? `${metrics.tmdStation.name} · ห่าง ${metrics.tmdStation.distKm} กม. · เกินสุด ${fmt(metrics.tmdMax24h)} มม.`
@@ -339,7 +380,7 @@ function renderStationTable(data) {
     };
     const name = s.nameEn || s.nameTh;
     return `<tr>
-      <td>${name}${s.nameEn && s.nameTh ? ` <span style="color:#93a4c3">(${s.nameTh})</span>` : ''}</td>
+      <td>${name}${s.nameEn && s.nameTh ? ` <span style="color:var(--muted)">(${s.nameTh})</span>` : ''}</td>
       <td class="num">${s.distKm ?? '–'} กม.</td>
       <td class="num">${fmt(s.rain3h)}</td>
       <td class="num">${badge(s.rain24h)}</td>
@@ -381,7 +422,8 @@ function initMap() {
   }
   const p = state.config ? state.config.park : { lat: 13.0833, lon: 100.9667, name: 'สวนอุตสาหกรรมเครือสหพัฒน์ ศรีราชา' };
   state.map = L.map('map', { zoomControl: true }).setView([p.lat, p.lon], 11);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  const basemapStyle = currentTheme() === 'light' ? 'light_all' : 'dark_all';
+  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${basemapStyle}/{z}/{x}/{y}{r}.png`, {
     attribution: '&copy; OpenStreetMap &copy; CARTO',
     maxZoom: 19,
   }).addTo(state.map);
@@ -413,16 +455,20 @@ function updateStationMarkers(data) {
 
 async function loadRadar() {
   const data = await api('/api/radar');
-  if (data.rainviewer) {
+  if (data.rainviewer && (data.rainviewer.frames || []).length) {
     state.rvFrames = data.rainviewer.frames || [];
     state.rvHost = data.rainviewer.host || 'https://tilecache.rainviewer.com';
     $('#mapNote').textContent = `เวลาเรดาร์ (ล่าสุด): ${state.rvFrames.length ? new Date(state.rvFrames[state.rvFrames.length - 1].time * 1000).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' }) : '–'}`;
     if ($('#toggleRadar').checked) setRadarFrame(state.rvFrames.length - 1);
+  } else {
+    $('#mapNote').textContent = 'เรดาร์ RainViewer: ยังโหลดไม่สำเร็จ — จะลองใหม่ในการรีเฟรชถัดไป';
   }
   if (data.royalrain && data.royalrain.frames && data.royalrain.frames.length) {
     state.capiFrames = data.royalrain.frames;
     state.capiIdx = 0;
     showCapi(state.capiFrames.length - 1);
+  } else if (!state.capiFrames.length) {
+    $('#radarTime').textContent = 'เรดาร์ฝนหลวง: ยังโหลดไม่สำเร็จ — จะลองใหม่ในการรีเฟรชถัดไป';
   }
 }
 
@@ -478,7 +524,7 @@ async function loadWarnings() {
     return;
   }
   box.innerHTML = data.warnings.slice(0, 4).map((w) =>
-    `<div class="warning-item"><b>${w.title}</b> <span style="color:#93a4c3">${w.datetime || ''}</span>
+    `<div class="warning-item"><b>${w.title}</b> <span style="color:var(--muted)">${w.datetime || ''}</span>
      <div class="w-desc">${(w.desc || '').slice(0, 300)}</div></div>`
   ).join('');
 }

@@ -76,7 +76,7 @@ const config = {
     mode: (process.env.INTERNAL_MODE || 'delta').toLowerCase(),
     token: process.env.INTERNAL_TOKEN || '',
     staleMinutes: num(process.env.INTERNAL_STALE_MINUTES, 15),
-    demoWhenEmpty: bool(process.env.INTERNAL_DEMO_WHEN_EMPTY, true),
+    demoWhenEmpty: bool(process.env.INTERNAL_DEMO_WHEN_EMPTY, false),
   },
 
   mqtt: {

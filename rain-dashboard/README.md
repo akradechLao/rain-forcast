@@ -15,6 +15,9 @@ npm start
 # เปิด http://localhost:8080
 ```
 
+**deploy ขึ้นเซิร์ฟเวอร์ (AApanel + Cloudflare)** → ดู [docs/deploy-aapanel.md](docs/deploy-aapanel.md)
+(ได้ชื่อเว็บแบบ `https://saha-rain-watch.<โดเมนของคุณ>`)
+
 ตั้งค่า (ไม่บังคับ — ใช้ค่าเริ่มต้นได้ทันที):
 
 ```bash

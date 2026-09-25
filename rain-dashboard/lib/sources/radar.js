@@ -21,7 +21,7 @@ async function getJson(url, timeoutMs = 40000, retries = 3) {
 
 /** RainViewer: metadata เรดาร์ฝน (tiles + nowcast) สำหรับซ้อนแผนที่ Leaflet */
 async function fetchRainViewer() {
-  const j = await getJson('https://api.rainviewer.com/public/weather-maps.json');
+  const j = await getJson('https://api.rainviewer.com/public/weather-maps.json', 20000, 2);
   const past = (j.radar && j.radar.past) || [];
   const nowcast = (j.radar && j.radar.nowcast) || [];
   return {
@@ -35,14 +35,18 @@ async function fetchRainViewer() {
 
 /** เรดาร์ฝนหลวง (กรมฝนหลวงฯ) สถานีสัตหีบ — ภาพ CAPPI ทุก 6 นาที */
 async function fetchRoyalRain() {
-  const j = await getJson('https://file.royalrain.go.th/opendata/radar_data/cappi/api.php?station=sattahip');
-  const frames = (j.data || []).slice(0, 30).map((f) => ({
-    datetimeBangkok: f.datetime_bangkok,
-    datetimeUtc: f.datetime_utc,
-    // เก็บ path ไว้ proxy ผ่านเซิร์ฟเวอร์กันปัญหา hotlink/mixed-content
-    path: String(f.url || '').replace(/^https?:\/\/[^/]+/i, ''),
-    fullUrl: f.url,
-  }));
+  const j = await getJson('https://file.royalrain.go.th/opendata/radar_data/cappi/api.php?station=sattahip', 15000, 2);
+  const frames = (j.data || []).slice(0, 30).map((f) => {
+    // บังคับ https — ต้นทาง file.royalrain.go.th ปิด port 80 (http timeout)
+    const fullUrl = String(f.url || '').replace(/^http:\/\//i, 'https://');
+    return {
+      datetimeBangkok: f.datetime_bangkok,
+      datetimeUtc: f.datetime_utc,
+      // path ไว้ proxy ผ่านเซิร์ฟเวอร์กันปัญหา hotlink/mixed-content
+      path: fullUrl.replace(/^https?:\/\/[^/]+/i, ''),
+      fullUrl,
+    };
+  });
   return { station: 'sattahip', count: j.count || frames.length, frames };
 }
 
