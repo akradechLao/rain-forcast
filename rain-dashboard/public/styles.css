@@ -171,8 +171,8 @@ section { margin-bottom: 16px; }
 .kpi-note { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
 .kpi-accent { border-color: var(--accent2); box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.35) inset; }
 .kpi-accent .kpi-value { color: var(--accent); }
-.kpi-value.level-warn { color: var(--warn) !important; }
-.kpi-value.level-danger { color: var(--danger) !important; animation: pulse 1.6s infinite; }
+.kpi-value.level-warn, .kpi-value .level-warn { color: var(--warn) !important; }
+.kpi-value.level-danger, .kpi-value .level-danger { color: var(--danger) !important; animation: pulse 1.6s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
 
 /* ===== charts ===== */

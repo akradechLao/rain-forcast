@@ -1,6 +1,7 @@
 'use strict';
 const config = require('./config');
 const store = require('./store');
+const water = require('./ingest/waterLevel');
 
 const RULES_FILE = 'alert-rules.json';
 const STATE_FILE = 'notify-state.json';
@@ -11,19 +12,28 @@ const DEFAULT_RULES = [
   { id: 'rh', label: 'ฝนตกหนักในชั่วโมงล่าสุด', metric: 'rainHour', op: '>', threshold: 30, unit: 'มม./ชม.', enabled: true },
   { id: 'rtmd', label: 'ฝนสะสม 24 ชม. (สถานีราชการใกล้สุด)', metric: 'tmdRain24h', op: '>', threshold: 60, unit: 'มม.', enabled: false },
   { id: 'rstale', label: 'เซนเซอร์ภายในขาดสัญญาณ', metric: 'internalStaleMin', op: '>', threshold: 15, unit: 'นาที', enabled: true },
-  { id: 'rwater', label: 'ระดับน้ำสูงผิดปกติ', metric: 'waterLevel', op: '>', threshold: 1.5, unit: 'ม.', enabled: true },
+  { id: 'rwater', label: 'ระดับน้ำเข้าใกล้ขอบน้ำล้น (spill way)', metric: 'waterLevel', op: '>=', threshold: 2, unit: 'ระดับ', enabled: true },
 ];
 
 function loadRules() {
   const saved = store.readJson(RULES_FILE, null);
   if (saved && Array.isArray(saved.rules)) {
+    let dirty = false;
     // เติมกฎใหม่ที่ยังไม่มีในไฟล์ (อัปเดตซอฟต์แวร์แล้วกฎเดิมไม่หาย)
     const known = new Set(saved.rules.map((r) => r.id));
     const missing = DEFAULT_RULES.filter((r) => !known.has(r.id));
     if (missing.length) {
       saved.rules.push(...missing);
-      store.writeJson(RULES_FILE, { rules: saved.rules });
+      dirty = true;
     }
+    // migrate: rwater รุ่นก่อนปล่อย (ตีความค่า 1.5 ผิดเป็นเมตร → เปลี่ยนเป็นรหัสระดับ >= 2)
+    const rw = saved.rules.find((r) => r.id === 'rwater');
+    const rwDef = DEFAULT_RULES.find((r) => r.id === 'rwater');
+    if (rw && rwDef && rw.threshold === 1.5 && rw.op === '>') {
+      Object.assign(rw, rwDef);
+      dirty = true;
+    }
+    if (dirty) store.writeJson(RULES_FILE, { rules: saved.rules });
     return saved.rules;
   }
   store.writeJson(RULES_FILE, { rules: DEFAULT_RULES });
@@ -64,7 +74,9 @@ function buildMessage(events, metrics, parkName) {
     'เกณฑ์ที่ถูกกระตุ้น:',
   ];
   for (const e of events) {
-    lines.push(`• ${e.label}: ${fmtVal(e.value, e.unit)} (เกณฑ์ ${e.op} ${fmtVal(e.threshold, e.unit)})`);
+    // ระดับน้ำเป็นรหัสสถานะ แสดงเป็น "ระดับ N" ไม่ใช่หน่วยเมตร
+    const fmtEv = (v) => (e.metric === 'waterLevel' ? `ระดับ ${v}` : fmtVal(v, e.unit));
+    lines.push(`• ${e.label}: ${fmtEv(e.value)} (เกณฑ์ ${e.op} ${fmtEv(e.threshold)})`);
   }
   lines.push('');
   lines.push('สรุป ณ ขณะนี้:');
@@ -72,7 +84,9 @@ function buildMessage(events, metrics, parkName) {
   if (metrics.rain7d !== null && metrics.rain7d !== undefined) lines.push(`• ฝนสะสม 7 วัน: ${fmtVal(metrics.rain7d, 'มม.')}`);
   if (metrics.rainHour !== null && metrics.rainHour !== undefined) lines.push(`• ฝนชั่วโมงล่าสุด: ${fmtVal(metrics.rainHour, 'มม.')}`);
   if (metrics.internalRain24h !== null && metrics.internalRain24h !== undefined) lines.push(`• ฝนจากเซนเซอร์ภายใน (24 ชม.): ${fmtVal(metrics.internalRain24h, 'มม.')}`);
-  if (metrics.waterLevel !== null && metrics.waterLevel !== undefined) lines.push(`• ระดับน้ำล่าสุด: ${fmtVal(metrics.waterLevel, metrics.waterUnit || 'ม.')}`);
+  if (metrics.waterLevel !== null && metrics.waterLevel !== undefined) {
+    lines.push(`• ระดับน้ำล่าสุด: ระดับ ${metrics.waterLevel} (${water.describe(Number(metrics.waterLevel))})`);
+  }
   lines.push('');
   lines.push('เปิดดูแดชบอร์ด: ' + (process.env.DASHBOARD_URL || '(ตั้ง DASHBOARD_URL ใน .env)'));
   return lines.join('\n');

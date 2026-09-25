@@ -4,6 +4,24 @@ const store = require('../store');
 
 const FILE = 'water-level.jsonl';
 
+/**
+ * รหัสสถานะจากเซนเซอร์ (ไม่ใช่ความสูงเป็นเมตร)
+ * เทียบระดับความสูงของขอบทางน้ำล้น (spill way) คลองห้วยใหญ่
+ */
+const LEVELS = {
+  1: { label: 'ปกติ', desc: 'ต่ำกว่าขอบน้ำล้น (spill way) คลองห้วยใหญ่ 75 ซม.' },
+  2: { label: 'เฝ้าระวัง', desc: 'ต่ำกว่าขอบน้ำล้น (spill way) คลองห้วยใหญ่ 45 ซม.' },
+  3: { label: 'วิกฤติ', desc: 'น้ำใกล้ล้น spill way คลองห้วยใหญ่ ต่ำกว่าขอบ 10 ซม.' },
+};
+
+/** คำอธิบายสถานะระดับน้ำ เช่น "วิกฤติ — น้ำใกล้ล้น spill way..." */
+function describe(level) {
+  const info = LEVELS[Number(level)];
+  if (info) return `${info.label} — ${info.desc}`;
+  if (level === null || level === undefined) return '';
+  return `ไม่ทราบสถานะ (รหัส ${level})`;
+}
+
 let client = null;
 let status = { configured: false, connected: false, lastMessageAt: null, lastError: null, count: 0 };
 
@@ -111,4 +129,4 @@ function getStatus() {
   };
 }
 
-module.exports = { start, readHistory, getStatus };
+module.exports = { start, readHistory, getStatus, LEVELS, describe };

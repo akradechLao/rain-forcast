@@ -121,6 +121,7 @@ function computeMetrics() {
     waterStaleMin: null,
     waterLastAt: null,
     waterUnit: config.water.unit,
+    waterLevels: waterLevel.LEVELS,
   };
   if (series.length) {
     const last = series[series.length - 1];
@@ -276,7 +277,7 @@ async function handleApi(req, res, url) {
       park: config.park,
       refresh: config.refresh,
       internal: { mode: config.internal.mode, staleMinutes: config.internal.staleMinutes, tokenRequired: Boolean(config.internal.token) },
-      water: { unit: config.water.unit, warnLevel: config.water.warnLevel },
+      water: { unit: config.water.unit, warnLevel: config.water.warnLevel, levels: waterLevel.LEVELS },
       notify: notify.channelStatus(),
       generatedAt: new Date().toISOString(),
     });
@@ -340,6 +341,7 @@ async function handleApi(req, res, url) {
     const rule = notify.loadRules().find((r) => r.metric === 'waterLevel' && r.enabled);
     sendJson(res, 200, {
       ...data,
+      levels: waterLevel.LEVELS,
       warnLevel: rule ? rule.threshold : config.water.warnLevel,
       configured: Boolean(config.water.url && config.water.topic),
       generatedAt: new Date().toISOString(),

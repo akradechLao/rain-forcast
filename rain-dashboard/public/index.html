@@ -10,7 +10,8 @@
   <link rel="stylesheet" href="/styles.css">
   <script>
     try {
-      var _t = localStorage.getItem('dashboardTheme');
+      var _q = new URLSearchParams(location.search).get('theme');
+      var _t = (_q === 'light' || _q === 'dark') ? _q : localStorage.getItem('dashboardTheme');
       document.documentElement.setAttribute('data-theme', _t === 'light' ? 'light' : 'dark');
     } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
   </script>

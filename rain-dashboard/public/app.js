@@ -68,7 +68,11 @@ const hasLeaflet = typeof L !== 'undefined';
 
 const THEME_KEY = 'dashboardTheme';
 function currentTheme() {
-  try { return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'; } catch (_) { return 'dark'; }
+  try {
+    const q = new URLSearchParams(location.search).get('theme');
+    if (q === 'light' || q === 'dark') return q;
+    return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+  } catch (_) { return 'dark'; }
 }
 function setThemeButton() {
   const b = $('#themeToggle');
@@ -76,7 +80,9 @@ function setThemeButton() {
 }
 function toggleTheme() {
   try { localStorage.setItem(THEME_KEY, currentTheme() === 'light' ? 'dark' : 'light'); } catch (_) {}
-  location.reload();
+  const u = new URL(window.location.href);
+  u.searchParams.delete('theme');
+  location.href = u.pathname + u.search + u.hash;
 }
 
 if (hasChart) {
@@ -178,13 +184,14 @@ async function loadKpi() {
     ? `${metrics.tmdStation.name} · ห่าง ${metrics.tmdStation.distKm} กม. · เกินสุด ${fmt(metrics.tmdMax24h)} มม.`
     : '–';
 
-  $('#kpiWaterUnit').textContent = metrics.waterUnit || 'ม.';
-  $('#kpiWater').textContent = metrics.waterLevel !== null && metrics.waterLevel !== undefined
-    ? Number(metrics.waterLevel).toFixed(1)
-    : '–';
+  const wLevels = metrics.waterLevels || {};
+  const wInfo = wLevels[Number(metrics.waterLevel)];
+  const hasWater = metrics.waterLevel !== null && metrics.waterLevel !== undefined;
+  $('#kpiWaterUnit').textContent = '';
+  $('#kpiWater').textContent = hasWater ? `ระดับ ${Number(metrics.waterLevel)}` : '–';
   $('#kpiWaterNote').textContent = metrics.waterLastAt
-    ? (metrics.waterLevel !== null && metrics.waterLevel !== undefined
-        ? `ล่าสุด ${fmtTime(metrics.waterLastAt)}${metrics.waterStaleMin !== null ? ` (ขาดสัญญาณ ${metrics.waterStaleMin} นาที)` : ''}`
+    ? (hasWater
+        ? `${wInfo ? `${wInfo.label} — ${wInfo.desc} · ` : ''}ล่าสุด ${fmtTime(metrics.waterLastAt)}${metrics.waterStaleMin !== null ? ` (ขาดสัญญาณ ${metrics.waterStaleMin} นาที)` : ''}`
         : `ขาดสัญญาณ ${metrics.waterStaleMin} นาที`)
     : 'ยังไม่มีข้อมูลเซนเซอร์ระดับน้ำ';
 
@@ -213,17 +220,27 @@ function renderAlertBanner() {
   const banner = $('#alertBanner');
   if (!ev.length) { banner.classList.add('hidden'); return; }
   banner.classList.remove('hidden');
-  const danger = ev.some((e) => e.metric === 'rain24h' || e.metric === 'rain7d' || e.metric === 'waterLevel');
+  const danger = ev.some((e) => e.metric === 'rain24h' || e.metric === 'rain7d'
+    || (e.metric === 'waterLevel' && Number(e.value) >= 3));
   banner.classList.toggle('severity-low', !danger);
   $('#alertBannerText').innerHTML =
     `<b>เกินเกณฑ์แจ้งเตือน:</b> ` +
-    ev.map((e) => `${e.label} = ${fmt(e.value)} ${e.unit || ''} (เกณฑ์ ${e.op} ${e.threshold})`).join(' · ');
+    ev.map((e) => {
+      if (e.metric === 'waterLevel') {
+        const info = (state.metrics.waterLevels || {})[Number(e.value)];
+        return `${e.label} = ระดับ ${e.value}${info ? ` (${info.label})` : ''}`;
+      }
+      return `${e.label} = ${fmt(e.value)} ${e.unit || ''} (เกณฑ์ ${e.op} ${e.threshold})`;
+    }).join(' · ');
   // ระบายสี KPI ตามระดับ
   const level = (el, metric) => {
     const node = $(el);
     node.classList.remove('level-warn', 'level-danger');
     const trig = ev.find((e) => e.metric === metric);
-    if (trig) node.classList.add('level-danger');
+    if (!trig) return;
+    // น้ำ: ระดับ 2 = เฝ้าระวัง (สีเหลือง), ระดับ 3 = วิกฤติ (สีแดง)
+    if (metric === 'waterLevel' && Number(trig.value) < 3) node.classList.add('level-warn');
+    else node.classList.add('level-danger');
   };
   level('#kpi24h', 'rain24h');
   level('#kpi7d', 'rain7d');
@@ -534,7 +551,8 @@ async function loadWater() {
 
 function renderWaterChart(data) {
   if (!hasChart) return;
-  const unit = data.unit || 'ม.';
+  const unit = data.unit || 'ระดับ';
+  const levels = data.levels || {};
   const rows = data.series || [];
   const labels = rows.map((r) => {
     const d = new Date(r.t);
@@ -542,7 +560,7 @@ function renderWaterChart(data) {
   });
   const datasets = [
     {
-      label: `ระดับน้ำ (${unit})`,
+      label: 'ระดับน้ำ',
       data: rows.map((r) => r.level),
       borderColor: '#38bdf8',
       backgroundColor: 'rgba(56,189,248,0.15)',
@@ -554,7 +572,7 @@ function renderWaterChart(data) {
   ];
   if (data.warnLevel !== null && data.warnLevel !== undefined) {
     datasets.push({
-      label: `เกณฑ์เตือน (${data.warnLevel} ${unit})`,
+      label: `เกณฑ์เตือน (ระดับ ${data.warnLevel})`,
       data: rows.map(() => data.warnLevel),
       borderColor: '#f87171',
       borderDash: [6, 6],
@@ -572,11 +590,24 @@ function renderWaterChart(data) {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y}` } },
+        tooltip: {
+          callbacks: {
+            label: (c) => {
+              if (c.dataset.label.startsWith('เกณฑ์')) return c.dataset.label;
+              const info = levels[Number(c.parsed.y)];
+              return `ระดับน้ำ: ระดับ ${c.parsed.y}${info ? ` — ${info.label}` : ''}`;
+            },
+          },
+        },
       },
       scales: {
         x: { ticks: { maxTicksLimit: 14, maxRotation: 0, font: { size: 10 } } },
-        y: { title: { display: true, text: unit } },
+        y: {
+          min: 0,
+          max: 4,
+          ticks: { stepSize: 1 },
+          title: { display: true, text: unit },
+        },
       },
     },
   };
