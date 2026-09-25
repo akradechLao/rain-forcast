@@ -95,7 +95,8 @@
           <div class="legend">
             <span class="lg lg-past">ย้อนหลัง/วัดได้</span>
             <span class="lg lg-fc">พยากรณ์</span>
-            <span class="lg lg-cum">ฝนสะสม</span>
+            <span class="lg lg-cum">ฝนสะสมรายวัน</span>
+            <span class="lg lg-roll">ฝน 24 ชม.</span>
           </div>
         </div>
         <div class="chart-wrap tall"><canvas id="chartHourly"></canvas></div>
@@ -226,8 +227,18 @@
       </div>
 
       <div class="card">
-        <div class="card-head"><h2>ฝนรายวันย้อนหลัง (กราฟสะสม)</h2></div>
+        <div class="card-head">
+          <h2>ฝนย้อนหลัง (แท่งรายวัน + เส้นมวลฝน)</h2>
+          <div class="range-switch" id="backSwitch">
+            <button data-back="1" class="btn btn-sm">1 วัน</button>
+            <button data-back="7" class="btn btn-sm active">7 วัน</button>
+            <button data-back="30" class="btn btn-sm">30 วัน</button>
+            <button data-back="365" class="btn btn-sm">1 ปี</button>
+            <button data-back="1825" class="btn btn-sm">5 ปี</button>
+          </div>
+        </div>
         <div class="chart-wrap"><canvas id="chartCumDaily"></canvas></div>
+        <div class="map-note" id="backSourceNote"></div>
       </div>
     </section>
 

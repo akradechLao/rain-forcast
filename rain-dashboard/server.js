@@ -290,15 +290,39 @@ async function handleApi(req, res, url) {
   }
 
   if (p === '/api/series') {
-    const days = Math.min(60, Math.max(1, Number(url.searchParams.get('days')) || 14));
+    const days = Math.min(3650, Math.max(1, Number(url.searchParams.get('days')) || 14));
     const all = openmeteo.readHourly();
-    const windowed = all.filter((x) => new Date(x.t).getTime() >= Date.now() - days * 86400000);
-    // ฝนสะสม (running total) เริ่มจาก 0 ที่ขอบซ้ายของช่วงที่ดู — แถวในไฟล์ไม่ได้เก็บ cum
-    let acc = 0;
-    const series = windowed.map((row) => {
-      acc = Math.round((acc + (row.mm || 0)) * 10) / 10;
-      return { ...row, cum: acc };
-    });
+    const nowMs = Date.now();
+    const windowed = all.filter((x) => new Date(x.t).getTime() >= nowMs - days * 86400000);
+    // ฝนสะสมรายวัน (reset เที่ยงคืนเวลาไทย) + ฝน 24 ชม.ย้อนหลัง (moving)
+    // คำนวณจากชุดเต็มก่อนตัดหน้าต่าง เพื่อไม่ให้แถวแรกของช่วงขาดข้อมูลก่อนหน้า
+    const times = all.map((r) => new Date(r.t).getTime());
+    const cumDayByT = new Map();
+    const rollByT = new Map();
+    let dayKey = null;
+    let dayAcc = 0;
+    let rollAcc = 0;
+    let rollStart = 0;
+    for (let i = 0; i < all.length; i++) {
+      const t = all[i].t;
+      const mm = all[i].mm || 0;
+      const day = t.slice(0, 10);
+      if (day !== dayKey) { dayKey = day; dayAcc = 0; }
+      dayAcc = Math.round((dayAcc + mm) * 10) / 10;
+      rollAcc += mm;
+      // เก็บช่วง (t-24h, t] = 24 ชั่วโมงล่าสุด
+      while (rollStart < i && times[rollStart] <= times[i] - 86400000) {
+        rollAcc -= all[rollStart].mm || 0;
+        rollStart++;
+      }
+      cumDayByT.set(t, dayAcc);
+      rollByT.set(t, Math.round(rollAcc * 10) / 10);
+    }
+    const series = windowed.map((row) => ({
+      ...row,
+      cumDay: cumDayByT.has(row.t) ? cumDayByT.get(row.t) : 0,
+      roll24: rollByT.has(row.t) ? rollByT.get(row.t) : 0,
+    }));
     const daily = openmeteo.toDaily(all);
     const internalData = internal.readHistory({ days });
     sendJson(res, 200, {

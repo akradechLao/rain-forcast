@@ -61,6 +61,7 @@ const state = {
   nextRefreshAt: Date.now() + 60000,
   seriesCache: null,
   stationsCache: null,
+  backDays: 7,
 };
 
 const hasChart = typeof Chart !== 'undefined';
@@ -130,6 +131,19 @@ function bindUI() {
     state.days = Number(b.dataset.days);
     loadSeries();
   }));
+  // ปุ่มเลือกช่วงดูค่าย้อนหลัง (การ์ดล่าง) — ?back=365 ใน URL ตั้งค่าเริ่มต้นได้ (share link)
+  const backParam = Number(new URLSearchParams(location.search).get('back'));
+  if (backParam) state.backDays = backParam;
+  const backBtn = $(`#backSwitch .btn[data-back="${state.backDays}"]`);
+  if (backBtn) $$('#backSwitch .btn').forEach((x) => x.classList.toggle('active', x === backBtn));
+  $('#backSwitch').addEventListener('click', (e) => {
+    const b = e.target.closest('.btn');
+    if (!b) return;
+    $$('#backSwitch .btn').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    state.backDays = Number(b.dataset.back);
+    if (state.seriesCache) renderCumDailyChart(state.seriesCache);
+  });
   $('#csvFile').addEventListener('change', uploadCsv);
   // ขยาย/ย่อข้อความประกาศเตือนแบบเต็ม
   $('#warningsBox').addEventListener('click', (e) => {
@@ -292,8 +306,8 @@ function renderHourlyChart(data) {
           order: 2,
         },
         {
-          label: 'ฝนสะสม (มม.)',
-          data: rows.map((r) => r.cum),
+          label: 'ฝนสะสมรายวัน (มม.)',
+          data: rows.map((r) => r.cumDay),
           type: 'line',
           borderColor: '#fbbf24',
           backgroundColor: 'transparent',
@@ -302,6 +316,19 @@ function renderHourlyChart(data) {
           yAxisID: 'y1',
           tension: 0.25,
           order: 1,
+        },
+        {
+          label: 'ฝน 24 ชม.ย้อนหลัง (มม.)',
+          data: rows.map((r) => r.roll24),
+          type: 'line',
+          borderColor: '#22d3ee',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          borderDash: [5, 3],
+          yAxisID: 'y1',
+          tension: 0.25,
+          order: 0,
         },
       ],
     },
@@ -356,31 +383,84 @@ function renderDailyChart(data) {
 
 function renderCumDailyChart(data) {
   if (!hasChart) return;
-  const days = data.daily.slice(-21);
+  const b = state.backDays;
+  let labels = [];
+  let bars = [];
+  let barLabel = 'ฝนรายวัน (มม.)';
+  let unit = 'มม./วัน';
+  if (b <= 1) {
+    // 24 ชม. ย้อนหลัง — รายชั่วโมง
+    const rows = (data.hourly || []).slice(-24);
+    labels = rows.map((r) => r.t.slice(11, 16));
+    bars = rows.map((r) => r.mm);
+    barLabel = 'ฝนรายชั่วโมง (มม.)';
+    unit = 'มม./ชม.';
+  } else if (b <= 90) {
+    // รายวัน (ตัดวันตามปฏิทิน เวลาไทย) — เปรียบเทียบวันต่อวัน
+    const grid = (data.daily || []).slice(-b);
+    labels = grid.map((g) => g.day.slice(5).replace('-', '/'));
+    bars = grid.map((g) => g.mm);
+  } else {
+    // ช่วงยาวรวมเป็นรายเดือน (ตามแบบวิชาการ — 5 ปี = 1,825 แท่งรายวัน อ่านยาก)
+    const byMonth = new Map();
+    for (const g of data.daily || []) {
+      const m = g.day.slice(0, 7);
+      byMonth.set(m, Math.round(((byMonth.get(m) || 0) + g.mm) * 10) / 10);
+    }
+    const months = [...byMonth.entries()].slice(-Math.max(12, Math.round(b / 30.4)));
+    labels = months.map(([m]) => `${m.slice(5)}/${m.slice(2, 4)}`);
+    bars = months.map(([, v]) => v);
+    barLabel = 'ฝนรายเดือน (มม.)';
+    unit = 'มม./เดือน';
+  }
   let cum = 0;
-  const cums = days.map((d) => { cum = Math.round((cum + d.mm) * 10) / 10; return cum; });
+  const cums = bars.map((v) => { cum = Math.round((cum + (v || 0)) * 10) / 10; return cum; });
   const cfg = {
-    type: 'line',
+    type: 'bar',
     data: {
-      labels: days.map((d) => d.day.slice(5).replace('-', '/')),
-      datasets: [{
-        label: 'ฝนสะสมรายวัน (มม.)',
-        data: cums,
-        borderColor: '#818cf8',
-        backgroundColor: 'rgba(129,140,248,0.15)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 2,
-      }],
+      labels,
+      datasets: [
+        {
+          label: barLabel,
+          data: bars,
+          backgroundColor: 'rgba(56,189,248,0.8)',
+          borderRadius: 2,
+          order: 2,
+        },
+        {
+          label: 'ฝนสะสม (มม.)',
+          data: cums,
+          type: 'line',
+          borderColor: '#fbbf24',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: b <= 30 ? 2 : 0,
+          tension: 0.25,
+          yAxisID: 'y1',
+          order: 1,
+        },
+      ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y} มม.` } },
+      },
+      scales: {
+        x: { ticks: { maxTicksLimit: 24, maxRotation: 0, font: { size: 10 } } },
+        y: { beginAtZero: true, title: { display: true, text: unit } },
+        y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'สะสม' } },
+      },
     },
   };
   upsertChart('chartCumDaily', cfg);
+  const note = $('#backSourceNote');
+  if (note) note.textContent = b > 90
+    ? 'ช่วงยาว: ค่าประมาณการเชิงวิชาการ — ที่มา Open-Meteo (ERA5 reanalysis) ไม่ใช่ฝนวัดจริง · รวมเป็นรายเดือนเพื่ออ่านง่าย'
+    : '';
 }
 
 function upsertChart(id, cfg) {

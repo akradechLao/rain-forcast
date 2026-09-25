@@ -41,8 +41,13 @@ function hourlyToMap(hourly) {
   return map;
 }
 
-async function fetchArchive(daysBack = 10) {
-  const end = new Date();
+async function fetchArchive(daysBack = 10, anchorMs = Date.now()) {
+  // Open-Meteo archive มี latency ~1 วัน — end_date ห้ามเกิน "วันก่อนวันนี้" (HTTP 400)
+  let end = new Date(anchorMs);
+  const maxEnd = new Date();
+  maxEnd.setHours(0, 0, 0, 0);
+  maxEnd.setDate(maxEnd.getDate() - 1);
+  if (end.getTime() > maxEnd.getTime()) end = maxEnd;
   const start = new Date(end.getTime() - daysBack * 86400000);
   const url = `${ARCHIVE}?latitude=${config.park.lat}&longitude=${config.park.lon}` +
     `&start_date=${fmtDate(start)}&end_date=${fmtDate(end)}` +
@@ -114,7 +119,9 @@ async function refresh() {
   const name = `hourly-${year}.jsonl`;
 
   await store.withLock(name, () => {
-    const existing = store.readJsonl(name);
+    // อ่านจาก .json (ฉบับสมบูรณ์รวมย้อนหลัง backfill) ก่อน — .jsonl เป็น fallback ของรุ่นเก่า
+    const jsonRows = store.readJson(name.replace('.jsonl', '.json'), null);
+    const existing = (Array.isArray(jsonRows) && jsonRows.length) ? jsonRows : store.readJsonl(name);
     const byTime = new Map(existing.map((r) => [r.t, r]));
     let added = 0;
     for (const p of series) {
@@ -127,21 +134,41 @@ async function refresh() {
     }
     if (added > 0 || existing.length !== byTime.size) {
       const rows = [...byTime.values()].sort((a, b) => (a.t < b.t ? -1 : 1));
-      // ตัดข้อมูลเก่ากว่า 60 วัน
-      const cutoff = fmtDate(new Date(Date.now() - 60 * 86400000)) + 'T00:00';
+      // เก็บย้อนหลัง 10 ปี (รองรับกราฟย้อนหลัง 5 ปี + เผื่อโต)
+      const cutoff = fmtDate(new Date(Date.now() - 10 * 365 * 86400000)) + 'T00:00';
       const kept = rows.filter((r) => r.t >= cutoff);
       store.writeJson(name.replace('.jsonl', '.json'), kept);
     }
+    hourlyCache = null;
   });
 
   return { series, daily, archiveCount: archiveMap.size, forecastCount: forecastMap.size };
 }
 
-function readHourly() {
-  const year = String(new Date().getFullYear());
-  const data = store.readJson(`hourly-${year}.json`, []);
-  if (data.length) return data;
-  return store.readJsonl(`hourly-${year}.jsonl`);
+// อ่านข้อมูลรวมทุกปี (แยกไฟล์ hourly-<year>.json) + cache ในหน่วยความจำ
+// (5 ปี ≈ 44,000 แถว — ไม่ parse ไฟล์ใหม่ทุก request)
+let hourlyCache = null;
+
+function invalidateHourlyCache() {
+  hourlyCache = null;
 }
 
-module.exports = { refresh, readHourly, toDaily, mergeSeries };
+function readHourly() {
+  if (hourlyCache) return hourlyCache;
+  const thisYear = new Date().getFullYear();
+  const rows = [];
+  for (let y = thisYear; y >= thisYear - 10; y--) {
+    const data = store.readJson(`hourly-${y}.json`, null);
+    if (Array.isArray(data) && data.length) {
+      rows.push(...data);
+    } else {
+      const jl = store.readJsonl(`hourly-${y}.jsonl`);
+      if (jl.length) rows.push(...jl);
+    }
+  }
+  rows.sort((a, b) => (a.t < b.t ? -1 : 1));
+  hourlyCache = rows;
+  return rows;
+}
+
+module.exports = { refresh, readHourly, toDaily, mergeSeries, fetchArchive, invalidateHourlyCache };

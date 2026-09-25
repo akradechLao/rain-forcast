@@ -190,6 +190,7 @@ section { margin-bottom: 16px; }
 .lg-past::before { color: var(--accent); }
 .lg-fc::before { color: var(--accent2); }
 .lg-cum::before { color: var(--warn); }
+.lg-roll::before { color: #22d3ee; }
 .range-switch { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 
 /* ===== map / radar ===== */
