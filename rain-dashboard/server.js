@@ -291,8 +291,15 @@ async function handleApi(req, res, url) {
 
   if (p === '/api/series') {
     const days = Math.min(60, Math.max(1, Number(url.searchParams.get('days')) || 14));
-    const series = openmeteo.readHourly().filter((x) => new Date(x.t).getTime() >= Date.now() - days * 86400000);
-    const daily = openmeteo.toDaily(openmeteo.readHourly());
+    const all = openmeteo.readHourly();
+    const windowed = all.filter((x) => new Date(x.t).getTime() >= Date.now() - days * 86400000);
+    // ฝนสะสม (running total) เริ่มจาก 0 ที่ขอบซ้ายของช่วงที่ดู — แถวในไฟล์ไม่ได้เก็บ cum
+    let acc = 0;
+    const series = windowed.map((row) => {
+      acc = Math.round((acc + (row.mm || 0)) * 10) / 10;
+      return { ...row, cum: acc };
+    });
+    const daily = openmeteo.toDaily(all);
     const internalData = internal.readHistory({ days });
     sendJson(res, 200, {
       days,

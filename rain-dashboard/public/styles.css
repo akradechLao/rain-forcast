@@ -175,6 +175,13 @@ section { margin-bottom: 16px; }
 .kpi-value.level-danger, .kpi-value .level-danger { color: var(--danger) !important; animation: pulse 1.6s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
 
+/* ===== map ===== */
+.basemap-pane { transition: filter 0.2s; }
+[data-theme="dark"] .basemap-pane {
+  /* OSM ไม่มีธีมเข้มฟรี — กลับสี basemap เฉพาะชั้นนี้ (เรดาร์/หมุดไม่โดน) */
+  filter: invert(1) hue-rotate(180deg) saturate(0.65) brightness(0.82) contrast(1.15);
+}
+
 /* ===== charts ===== */
 .chart-wrap { position: relative; height: 260px; }
 .chart-wrap.tall { height: 330px; }
@@ -233,7 +240,15 @@ tr:hover td { background: rgba(56, 189, 248, 0.06); }
 .warnings { font-size: 13.5px; color: var(--muted); margin-bottom: 10px; }
 .warning-item { border-left: 3px solid var(--warn); padding: 6px 10px; margin-bottom: 8px; background: rgba(251, 191, 36, 0.06); border-radius: 0 8px 8px 0; }
 .warning-item b { color: var(--text); }
-.warning-item .w-desc { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+.warning-item .w-dt { color: var(--muted); font-size: 12px; }
+.warning-item .w-desc { color: var(--muted); font-size: 12.5px; margin-top: 3px; white-space: pre-line; }
+.warning-item .w-desc.clamped {
+  max-height: 6.2em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, #000 65%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 65%, transparent 100%);
+}
+.warning-item .w-toggle { margin-top: 5px; }
 
 .sources-box { display: flex; flex-direction: column; gap: 6px; }
 .source-row {

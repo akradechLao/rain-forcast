@@ -131,6 +131,15 @@ function bindUI() {
     loadSeries();
   }));
   $('#csvFile').addEventListener('change', uploadCsv);
+  // ขยาย/ย่อข้อความประกาศเตือนแบบเต็ม
+  $('#warningsBox').addEventListener('click', (e) => {
+    const btn = e.target.closest('.w-toggle');
+    if (!btn) return;
+    const desc = document.getElementById(btn.dataset.target);
+    if (!desc) return;
+    const collapsed = desc.classList.toggle('clamped');
+    btn.textContent = collapsed ? 'แสดงข้อความทั้งหมด' : 'ย่อข้อความ';
+  });
 }
 
 function startClock() {
@@ -267,7 +276,9 @@ function renderHourlyChart(data) {
   if (!hasChart) return;
   const rows = data.hourly;
   const labels = rows.map((r) => labelFor(r.t));
-  const barColors = rows.map((r) => (r.src === 'forecast' ? 'rgba(129,140,248,0.75)' : 'rgba(56,189,248,0.8)'));
+  // ระบายสีตามเวลาจริง (ผ่าน now = ย้อนหลัง/ปัจจุบัน, อนาคต = พยากรณ์) ไม่พึ่ง src ของแหล่งข้อมูล
+  const nowMs = Date.now();
+  const barColors = rows.map((r) => (new Date(r.t).getTime() > nowMs ? 'rgba(129,140,248,0.75)' : 'rgba(56,189,248,0.8)'));
   const cfg = {
     type: 'bar',
     data: {
@@ -450,10 +461,14 @@ function initMap() {
   }
   const p = state.config ? state.config.park : { lat: 13.0833, lon: 100.9667, name: 'สวนอุตสาหกรรมเครือสหพัฒน์ ศรีราชา' };
   state.map = L.map('map', { zoomControl: true }).setView([p.lat, p.lon], 11);
-  const basemapStyle = currentTheme() === 'light' ? 'light_all' : 'dark_all';
-  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${basemapStyle}/{z}/{x}/{y}{r}.png`, {
-    attribution: '&copy; OpenStreetMap &copy; CARTO',
+  // basemap คนละ pane กับเรดาร์ เพื่อให้ปรับโทนสีได้โดยไม่กระทบชั้นเรดาร์/หมุด
+  state.map.createPane('basemapPane');
+  state.map.getPane('basemapPane').style.zIndex = 190;
+  state.map.getPane('basemapPane').classList.add('basemap-pane');
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 19,
+    pane: 'basemapPane',
   }).addTo(state.map);
   L.marker([p.lat, p.lon]).addTo(state.map)
     .bindPopup(`<b>${p.name}</b><br>ตำแหน่งสวนฯ`);
@@ -508,7 +523,9 @@ function setRadarFrame(idx) {
   const tileUrl = `${host}${f.path}/256/{z}/{x}/{y}/color/1_1.png`;
   if (state.radarLayer) state.map.removeLayer(state.radarLayer);
   if (!$('#toggleRadar').checked) return;
-  state.radarLayer = L.tileLayer(tileUrl, { opacity: 0.65, zIndex: 200 });
+  // RainViewer free รองรับ tile ถึง z7 เท่านั้น (z8+ คืนภาพ "Zoom Level Not Supported")
+  // -> maxNativeZoom 7 ให้ Leaflet ย่อขยาย tile เอง ภาพเรดาร์จะเบลสนิดหน่อยแต่แสดงครบ
+  state.radarLayer = L.tileLayer(tileUrl, { opacity: 0.65, zIndex: 200, maxNativeZoom: 7, maxZoom: 19 });
   state.radarLayer.addTo(state.map);
 }
 
@@ -622,10 +639,12 @@ async function loadWarnings() {
     box.innerHTML = '– ไม่มีประกาศเตือนภัยใหม่ –';
     return;
   }
-  box.innerHTML = data.warnings.slice(0, 4).map((w) =>
-    `<div class="warning-item"><b>${w.title}</b> <span style="color:var(--muted)">${w.datetime || ''}</span>
-     <div class="w-desc">${(w.desc || '').slice(0, 300)}</div></div>`
-  ).join('');
+  box.innerHTML = data.warnings.slice(0, 4).map((w, i) => `
+    <div class="warning-item">
+      <div class="w-head"><b>${escapeHtml(w.title || '')}</b> <span class="w-dt">${escapeHtml(w.datetime || '')}</span></div>
+      <div class="w-desc clamped" id="wdesc-${i}">${escapeHtml(w.desc || '')}</div>
+      <button type="button" class="btn btn-ghost btn-sm w-toggle" data-target="wdesc-${i}">แสดงข้อความทั้งหมด</button>
+    </div>`).join('');
 }
 
 async function loadSources() {

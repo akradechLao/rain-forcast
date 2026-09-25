@@ -64,12 +64,13 @@ async function fetchForecast(pastDays = 7, forecastDays = 7) {
  * คืนค่า array {t, mm, src} เรียงตามเวลา + ค่าสะสม running total
  */
 function mergeSeries(archiveMap, forecastMap) {
-  const now = new Date();
+  // "ชั่วโมงปัจจุบัน" แบบ Asia/Bangkok ตรงกับ timestamp ที่ API คืนมา (ไม่พึ่ง timezone ของเครื่องเซิร์ฟ)
+  const bkk = new Date(Date.now() + 7 * 3600000);
+  const nowHourStr = `${bkk.getUTCFullYear()}-${pad(bkk.getUTCMonth() + 1)}-${pad(bkk.getUTCDate())}T${pad(bkk.getUTCHours())}:00`;
   const keys = new Set([...archiveMap.keys(), ...forecastMap.keys()]);
   const sorted = [...keys].sort();
   const out = [];
   let cum = 0;
-  const nowHourStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:00`;
   for (const t of sorted) {
     let mm = null;
     let src = '';
