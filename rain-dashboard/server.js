@@ -12,6 +12,7 @@ const radar = require('./lib/sources/radar');
 const notify = require('./lib/notify');
 const internal = require('./lib/ingest/internal');
 const mqttIngest = require('./lib/ingest/mqttIngest');
+const waterLevel = require('./lib/ingest/waterLevel');
 
 // ---------- source status ----------
 const sources = {};
@@ -116,6 +117,10 @@ function computeMetrics() {
     internalRain24h: null,
     internalStaleMin: null,
     seriesPoints: series.length,
+    waterLevel: null,
+    waterStaleMin: null,
+    waterLastAt: null,
+    waterUnit: config.water.unit,
   };
   if (series.length) {
     const last = series[series.length - 1];
@@ -142,6 +147,15 @@ function computeMetrics() {
     m.internalRain1h = ih.rain1h;
     m.internalLastAt = ih.lastAt;
   } catch (_) { /* internal ไม่กระทบหลัก */ }
+  try {
+    const w = waterLevel.readHistory({ hours: 24 });
+    m.waterStaleMin = w.staleMin;
+    m.waterLastAt = w.latest ? w.latest.t : null;
+    // ใช้ค่าล่าสุดเฉพาะเมื่อไม่ขาดสัญญาณ (กันค่าค้างเตือนมั่ว)
+    if (w.latest && w.staleMin !== null && w.staleMin <= config.water.staleMinutes) {
+      m.waterLevel = w.latest.level;
+    }
+  } catch (_) { /* water ไม่กระทบหลัก */ }
   return m;
 }
 
@@ -262,6 +276,7 @@ async function handleApi(req, res, url) {
       park: config.park,
       refresh: config.refresh,
       internal: { mode: config.internal.mode, staleMinutes: config.internal.staleMinutes, tokenRequired: Boolean(config.internal.token) },
+      water: { unit: config.water.unit, warnLevel: config.water.warnLevel },
       notify: notify.channelStatus(),
       generatedAt: new Date().toISOString(),
     });
@@ -319,10 +334,24 @@ async function handleApi(req, res, url) {
     return true;
   }
 
+  if (p === '/api/water') {
+    const hours = Math.min(24 * 14, Math.max(1, Number(url.searchParams.get('hours')) || 24));
+    const data = waterLevel.readHistory({ hours });
+    const rule = notify.loadRules().find((r) => r.metric === 'waterLevel' && r.enabled);
+    sendJson(res, 200, {
+      ...data,
+      warnLevel: rule ? rule.threshold : config.water.warnLevel,
+      configured: Boolean(config.water.url && config.water.topic),
+      generatedAt: new Date().toISOString(),
+    });
+    return true;
+  }
+
   if (p === '/api/sources') {
     sendJson(res, 200, {
       sources: Object.values(sources),
       mqtt: mqttIngest.getStatus(),
+      water: waterLevel.getStatus(),
       generatedAt: new Date().toISOString(),
     });
     return true;
@@ -440,11 +469,13 @@ function startJobs() {
 
 async function main() {
   mqttIngest.start();
+  waterLevel.start();
   startJobs();
   server.listen(config.port, () => {
     console.log(`\n🌧  แดชบอร์ดน้ำฝน ศรีราชา  →  http://localhost:${config.port}`);
     console.log(`   พิกัดสวนฯ: ${config.park.lat}, ${config.park.lon}`);
-    console.log(`   MQTT: ${config.mqtt.url ? 'ตั้งค่าแล้ว' : 'ยังไม่ตั้งค่า (เปิดภายหลังได้)'}`);
+    console.log(`   MQTT ฝน: ${config.mqtt.url ? 'ตั้งค่าแล้ว' : 'ยังไม่ตั้งค่า (เปิดภายหลังได้)'}`);
+    console.log(`   MQTT ระดับน้ำ: ${config.water.url ? 'ตั้งค่าแล้ว' : 'ยังไม่ตั้งค่า (เปิดภายหลังได้)'}`);
     console.log(`   LINE: ${config.notify.line.enabled ? 'เปิด' : 'ปิด'} | อีเมล: ${config.notify.email.enabled ? 'เปิด' : 'ปิด'}\n`);
   });
 }

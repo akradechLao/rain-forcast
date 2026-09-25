@@ -148,7 +148,7 @@ async function refreshAll(manual = false) {
   state.nextRefreshAt = Date.now() + (state.config?.refresh?.tmdMs || 300000);
   $('#btnRefresh').disabled = true;
   try {
-    await Promise.allSettled([loadKpi(), loadSeries(), loadStations(), loadRadar(), loadWarnings(), loadSources(), loadNotify(), loadRules()]);
+    await Promise.allSettled([loadKpi(), loadSeries(), loadStations(), loadRadar(), loadWater(), loadWarnings(), loadSources(), loadNotify(), loadRules()]);
     $('#lastUpdated').textContent = 'อัปเดตล่าสุด ' + new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' });
     $('#offlineBanner').classList.add('hidden');
   } catch (e) {
@@ -178,6 +178,16 @@ async function loadKpi() {
     ? `${metrics.tmdStation.name} · ห่าง ${metrics.tmdStation.distKm} กม. · เกินสุด ${fmt(metrics.tmdMax24h)} มม.`
     : '–';
 
+  $('#kpiWaterUnit').textContent = metrics.waterUnit || 'ม.';
+  $('#kpiWater').textContent = metrics.waterLevel !== null && metrics.waterLevel !== undefined
+    ? Number(metrics.waterLevel).toFixed(1)
+    : '–';
+  $('#kpiWaterNote').textContent = metrics.waterLastAt
+    ? (metrics.waterLevel !== null && metrics.waterLevel !== undefined
+        ? `ล่าสุด ${fmtTime(metrics.waterLastAt)}${metrics.waterStaleMin !== null ? ` (ขาดสัญญาณ ${metrics.waterStaleMin} นาที)` : ''}`
+        : `ขาดสัญญาณ ${metrics.waterStaleMin} นาที`)
+    : 'ยังไม่มีข้อมูลเซนเซอร์ระดับน้ำ';
+
   renderAlertBanner();
 }
 
@@ -203,7 +213,7 @@ function renderAlertBanner() {
   const banner = $('#alertBanner');
   if (!ev.length) { banner.classList.add('hidden'); return; }
   banner.classList.remove('hidden');
-  const danger = ev.some((e) => e.metric === 'rain24h' || e.metric === 'rain7d');
+  const danger = ev.some((e) => e.metric === 'rain24h' || e.metric === 'rain7d' || e.metric === 'waterLevel');
   banner.classList.toggle('severity-low', !danger);
   $('#alertBannerText').innerHTML =
     `<b>เกินเกณฑ์แจ้งเตือน:</b> ` +
@@ -218,6 +228,7 @@ function renderAlertBanner() {
   level('#kpi24h', 'rain24h');
   level('#kpi7d', 'rain7d');
   level('#kpiHour', 'rainHour');
+  level('#kpiWater', 'waterLevel');
 }
 
 // ---------------- series / charts ----------------
@@ -515,6 +526,63 @@ function toggleCapiPlay() {
   }, 900);
 }
 
+// ---------------- water level ----------------
+async function loadWater() {
+  const data = await api('/api/water?hours=24');
+  renderWaterChart(data);
+}
+
+function renderWaterChart(data) {
+  if (!hasChart) return;
+  const unit = data.unit || 'ม.';
+  const rows = data.series || [];
+  const labels = rows.map((r) => {
+    const d = new Date(r.t);
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  });
+  const datasets = [
+    {
+      label: `ระดับน้ำ (${unit})`,
+      data: rows.map((r) => r.level),
+      borderColor: '#38bdf8',
+      backgroundColor: 'rgba(56,189,248,0.15)',
+      fill: true,
+      tension: 0.3,
+      pointRadius: rows.length > 60 ? 0 : 2,
+      borderWidth: 2,
+    },
+  ];
+  if (data.warnLevel !== null && data.warnLevel !== undefined) {
+    datasets.push({
+      label: `เกณฑ์เตือน (${data.warnLevel} ${unit})`,
+      data: rows.map(() => data.warnLevel),
+      borderColor: '#f87171',
+      borderDash: [6, 6],
+      borderWidth: 1.5,
+      pointRadius: 0,
+      fill: false,
+    });
+  }
+  const cfg = {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y}` } },
+      },
+      scales: {
+        x: { ticks: { maxTicksLimit: 14, maxRotation: 0, font: { size: 10 } } },
+        y: { title: { display: true, text: unit } },
+      },
+    },
+  };
+  upsertChart('chartWater', cfg);
+}
+
 // ---------------- warnings / sources ----------------
 async function loadWarnings() {
   const data = await api('/api/warnings');
@@ -549,8 +617,14 @@ async function loadSources() {
   const mqtt = data.mqtt;
   const mqttOk = mqtt.configured && mqtt.connected;
   rows.push(`<div class="source-row"><span class="dot ${mqtt.configured ? (mqttOk ? 'dot-ok' : 'dot-err') : 'dot-warn'}"></span>
-    <span class="source-name">เซนเซอร์ภายใน (MQTT)</span>
+    <span class="source-name">เซนเซอร์ฝน (MQTT)</span>
     <span class="source-meta">${mqtt.configured ? (mqttOk ? `เชื่อมต่อแล้ว · รับข้อมูล ${mqtt.count} ข้อความ` : `ยังเชื่อมไม่ต่อ: ${mqtt.lastError || '-'}`) : (mqtt.note || 'ยังไม่ได้ตั้งค่า (เปิดภายหลังได้)')}</span></div>`);
+
+  const water = data.water;
+  const waterOk = water.configured && water.connected;
+  rows.push(`<div class="source-row"><span class="dot ${water.configured ? (waterOk ? 'dot-ok' : 'dot-err') : 'dot-warn'}"></span>
+    <span class="source-name">เซนเซอร์ระดับน้ำ (MQTT)</span>
+    <span class="source-meta">${water.configured ? (waterOk ? `เชื่อมต่อแล้ว · ${water.count} ข้อความ · ${water.topic}` : `ยังเชื่อมไม่ต่อ: ${water.lastError || '-'}`) : (water.note || 'ยังไม่ได้ตั้งค่า (เปิดภายหลังได้)')}</span></div>`);
 
   box.innerHTML = rows.join('');
 

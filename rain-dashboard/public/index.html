@@ -75,6 +75,11 @@
         <div class="kpi-note" id="kpiTmdNote">–</div>
       </div>
       <div class="card kpi">
+        <div class="kpi-label">ระดับน้ำล่าสุด (เซนเซอร์ spi)</div>
+        <div class="kpi-value"><span id="kpiWater">–</span><small id="kpiWaterUnit">ม.</small></div>
+        <div class="kpi-note" id="kpiWaterNote">ยังไม่ได้ตั้งค่าเซนเซอร์</div>
+      </div>
+      <div class="card kpi">
         <div class="kpi-label">สถานะแหล่งข้อมูล</div>
         <div class="kpi-value"><span id="kpiSources">–</span></div>
         <div class="kpi-note" id="kpiSourcesNote">–</div>
@@ -109,6 +114,14 @@
       <div class="card">
         <div class="card-head"><h2>สถานีราชการใกล้เคียง — ฝนสะสม 24 ชม.</h2></div>
         <div class="chart-wrap"><canvas id="chartStations"></canvas></div>
+      </div>
+
+      <div class="card span-2">
+        <div class="card-head">
+          <h2>ระดับน้ำ — ย้อนหลัง 24 ชม. (เซนเซอร์ spi)</h2>
+          <div class="legend"><span class="lg lg-past">ระดับน้ำ</span><span class="lg lg-cum">เกณฑ์เตือน</span></div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartWater"></canvas></div>
       </div>
     </section>
 

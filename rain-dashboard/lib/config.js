@@ -90,6 +90,18 @@ const config = {
     fieldPathDelta: process.env.MQTT_FIELD_PATH_DELTA || '',
   },
 
+  // เซนเซอร์ระดับน้ำ (คนละช่องกับปริมาณน้ำฝน)
+  water: {
+    url: process.env.WATER_MQTT_BROKER || '',
+    topic: process.env.WATER_MQTT_TOPIC || '',
+    username: process.env.WATER_MQTT_USERNAME || '',
+    password: process.env.WATER_MQTT_PASSWORD || '',
+    fieldPath: process.env.WATER_FIELD_PATH || 'level',
+    unit: process.env.WATER_UNIT || 'ม.',
+    staleMinutes: num(process.env.WATER_STALE_MINUTES, 15),
+    warnLevel: num(process.env.WATER_WARN_LEVEL, 1.5),
+  },
+
   notify: {
     cooldownMin: num(process.env.NOTIFY_COOLDOWN_MIN, 60),
     line: {

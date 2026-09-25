@@ -128,7 +128,7 @@ section { margin-bottom: 16px; }
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
   gap: 12px;
 }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -136,11 +136,11 @@ section { margin-bottom: 16px; }
 .span-2 { grid-column: 1 / -1; }
 
 @media (max-width: 1250px) {
-  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+  .kpi-grid { grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); }
   .grid-map { grid-template-columns: 1fr; }
 }
 @media (max-width: 860px) {
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .kpi-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
   .grid-2 { grid-template-columns: 1fr; }
   .topbar h1 { font-size: 15px; }
 }

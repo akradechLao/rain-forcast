@@ -11,11 +11,21 @@ const DEFAULT_RULES = [
   { id: 'rh', label: 'ฝนตกหนักในชั่วโมงล่าสุด', metric: 'rainHour', op: '>', threshold: 30, unit: 'มม./ชม.', enabled: true },
   { id: 'rtmd', label: 'ฝนสะสม 24 ชม. (สถานีราชการใกล้สุด)', metric: 'tmdRain24h', op: '>', threshold: 60, unit: 'มม.', enabled: false },
   { id: 'rstale', label: 'เซนเซอร์ภายในขาดสัญญาณ', metric: 'internalStaleMin', op: '>', threshold: 15, unit: 'นาที', enabled: true },
+  { id: 'rwater', label: 'ระดับน้ำสูงผิดปกติ', metric: 'waterLevel', op: '>', threshold: 1.5, unit: 'ม.', enabled: true },
 ];
 
 function loadRules() {
   const saved = store.readJson(RULES_FILE, null);
-  if (saved && Array.isArray(saved.rules)) return saved.rules;
+  if (saved && Array.isArray(saved.rules)) {
+    // เติมกฎใหม่ที่ยังไม่มีในไฟล์ (อัปเดตซอฟต์แวร์แล้วกฎเดิมไม่หาย)
+    const known = new Set(saved.rules.map((r) => r.id));
+    const missing = DEFAULT_RULES.filter((r) => !known.has(r.id));
+    if (missing.length) {
+      saved.rules.push(...missing);
+      store.writeJson(RULES_FILE, { rules: saved.rules });
+    }
+    return saved.rules;
+  }
   store.writeJson(RULES_FILE, { rules: DEFAULT_RULES });
   return DEFAULT_RULES;
 }
@@ -62,6 +72,7 @@ function buildMessage(events, metrics, parkName) {
   if (metrics.rain7d !== null && metrics.rain7d !== undefined) lines.push(`• ฝนสะสม 7 วัน: ${fmtVal(metrics.rain7d, 'มม.')}`);
   if (metrics.rainHour !== null && metrics.rainHour !== undefined) lines.push(`• ฝนชั่วโมงล่าสุด: ${fmtVal(metrics.rainHour, 'มม.')}`);
   if (metrics.internalRain24h !== null && metrics.internalRain24h !== undefined) lines.push(`• ฝนจากเซนเซอร์ภายใน (24 ชม.): ${fmtVal(metrics.internalRain24h, 'มม.')}`);
+  if (metrics.waterLevel !== null && metrics.waterLevel !== undefined) lines.push(`• ระดับน้ำล่าสุด: ${fmtVal(metrics.waterLevel, metrics.waterUnit || 'ม.')}`);
   lines.push('');
   lines.push('เปิดดูแดชบอร์ด: ' + (process.env.DASHBOARD_URL || '(ตั้ง DASHBOARD_URL ใน .env)'));
   return lines.join('\n');
