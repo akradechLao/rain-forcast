@@ -506,6 +506,7 @@ async function loadRadar() {
   } else {
     $('#mapNote').textContent = 'เรดาร์ RainViewer: ยังโหลดไม่สำเร็จ — จะลองใหม่ในการรีเฟรชถัดไป';
   }
+  updateRadarLegend();
   if (data.royalrain && data.royalrain.frames && data.royalrain.frames.length) {
     state.capiFrames = data.royalrain.frames;
     state.capiIdx = 0;
@@ -520,18 +521,27 @@ function setRadarFrame(idx) {
   state.rvIdx = Math.max(0, Math.min(idx, state.rvFrames.length - 1));
   const f = state.rvFrames[state.rvIdx];
   const host = state.rvHost || 'https://tilecache.rainviewer.com';
-  const tileUrl = `${host}${f.path}/256/{z}/{x}/{y}/color/1_1.png`;
+  // RainViewer 2025: เหลือ color scheme เดียว = 2 (Universal Blue) — รูปแบบ /color/ คืนภาพ grayscale อ๊อปะค (แถบดำ)
+  const tileUrl = `${host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`;
   if (state.radarLayer) state.map.removeLayer(state.radarLayer);
   if (!$('#toggleRadar').checked) return;
   // RainViewer free รองรับ tile ถึง z7 เท่านั้น (z8+ คืนภาพ "Zoom Level Not Supported")
   // -> maxNativeZoom 7 ให้ Leaflet ย่อขยาย tile เอง ภาพเรดาร์จะเบลสนิดหน่อยแต่แสดงครบ
-  state.radarLayer = L.tileLayer(tileUrl, { opacity: 0.65, zIndex: 200, maxNativeZoom: 7, maxZoom: 19 });
+  state.radarLayer = L.tileLayer(tileUrl, { opacity: 0.7, zIndex: 200, maxNativeZoom: 7, maxZoom: 19 });
   state.radarLayer.addTo(state.map);
+}
+
+/** legend เรดาร์แสดงเฉพาะตอนมีเฟรมและเปิดชั้นเรดาร์อยู่ */
+function updateRadarLegend() {
+  const el = $('#radarLegend');
+  if (!el) return;
+  el.style.display = (state.rvFrames.length && $('#toggleRadar').checked) ? 'flex' : 'none';
 }
 
 function toggleRadarLayer() {
   if ($('#toggleRadar').checked) setRadarFrame(state.rvFrames.length - 1);
   else if (state.radarLayer && state.map) { state.map.removeLayer(state.radarLayer); state.radarLayer = null; }
+  updateRadarLegend();
 }
 
 function showCapi(idx) {
@@ -643,7 +653,10 @@ async function loadWarnings() {
     <div class="warning-item">
       <div class="w-head"><b>${escapeHtml(w.title || '')}</b> <span class="w-dt">${escapeHtml(w.datetime || '')}</span></div>
       <div class="w-desc clamped" id="wdesc-${i}">${escapeHtml(w.desc || '')}</div>
-      <button type="button" class="btn btn-ghost btn-sm w-toggle" data-target="wdesc-${i}">แสดงข้อความทั้งหมด</button>
+      <div class="w-actions">
+        <button type="button" class="btn btn-ghost btn-sm w-toggle" data-target="wdesc-${i}">แสดงข้อความทั้งหมด</button>
+        ${w.url ? `<a class="w-link" href="${escapeHtml(w.url)}" target="_blank" rel="noopener">อ่านประกาศฉบับเต็ม ↗</a>` : ''}
+      </div>
     </div>`).join('');
 }
 

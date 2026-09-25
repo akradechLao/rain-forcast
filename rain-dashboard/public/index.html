@@ -134,6 +134,20 @@
           <label class="switch"><input type="checkbox" id="toggleRadar" checked> ชั้นเรดาร์</label>
         </div>
         <div id="map"></div>
+        <div class="radar-legend" id="radarLegend">
+          <span class="rl-label">ฝน (มม./ชม.)</span>
+          <div class="rl-wrap">
+            <div class="rl-bar"></div>
+            <div class="rl-ticks">
+              <span style="left:11.7%">0.1</span>
+              <span style="left:38.3%">1</span>
+              <span style="left:59.2%">6</span>
+              <span style="left:75.7%">25</span>
+              <span style="left:91.8%">100</span>
+            </div>
+          </div>
+          <a class="rl-src" href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a>
+        </div>
         <div class="map-note" id="mapNote">เวลาเรดาร์: –</div>
       </div>
 
@@ -218,7 +232,7 @@
     </section>
 
     <footer class="footer">
-      แหล่งข้อมูล: กรมอุตุนิยมวิทยา (TMD API) · Open-Meteo · เรดาร์ฝนหลวง (กรมฝนหลวงและการบินเกษตร) · RainViewer ·
+      แหล่งข้อมูล: กรมอุตุนิยมวิทยา (TMD API) · Open-Meteo · เรดาร์ฝนหลวง (กรมฝนหลวงและการบินเกษตร) · <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a> ·
       ข้อมูลเซนเซอร์ภายในสวนฯ — อัปเดตอัตโนมัติทุก 5 นาที · <span id="footerTime"></span>
     </footer>
   </main>

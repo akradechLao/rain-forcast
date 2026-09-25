@@ -200,6 +200,21 @@ section { margin-bottom: 16px; }
   background: var(--map-bg);
 }
 .map-note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.radar-legend { display: none; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+.rl-label { white-space: nowrap; }
+.rl-wrap { flex: 1 1 200px; max-width: 340px; min-width: 170px; }
+.rl-bar {
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: linear-gradient(90deg,
+    #827b6949 0%, #92887164 8.3%, #cec08796 16.7%, #88ddeeff 25%, #00a3e0ff 33.3%, #0077aaff 41.7%,
+    #005588ff 50%, #ffee00ff 58.3%, #ffaa00ff 66.7%, #ff4400ff 75%, #c10000ff 83.3%, #ffaaffff 91.7%, #ff77ffff 100%);
+}
+.rl-ticks { position: relative; height: 14px; font-size: 10px; color: var(--muted); }
+.rl-ticks span { position: absolute; top: 1px; transform: translateX(-50%); }
+.rl-src { color: var(--accent); text-decoration: none; }
+.rl-src:hover { text-decoration: underline; }
 .switch { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .radar-frame {
   position: relative;
@@ -249,6 +264,9 @@ tr:hover td { background: rgba(56, 189, 248, 0.06); }
   mask-image: linear-gradient(180deg, #000 65%, transparent 100%);
 }
 .warning-item .w-toggle { margin-top: 5px; }
+.warning-item .w-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.warning-item .w-link { color: var(--accent); font-size: 12px; text-decoration: none; }
+.warning-item .w-link:hover { text-decoration: underline; }
 
 .sources-box { display: flex; flex-direction: column; gap: 6px; }
 .source-row {
@@ -315,6 +333,8 @@ tr:hover td { background: rgba(56, 189, 248, 0.06); }
 .file-btn { display: inline-block; cursor: pointer; }
 
 .footer { color: var(--muted); font-size: 12px; text-align: center; line-height: 1.8; margin-top: 24px; }
+.footer a { color: var(--accent); text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
 
 /* leaflet tweaks */
 .leaflet-container { background: var(--map-bg); font-family: inherit; }

@@ -122,17 +122,63 @@ async function fetchToday() {
   };
 }
 
+/** "YYYY-MM-DD HH:mm:ss[.SSS]" = เวลาไทย +07:00 — ห้ามพึ่ง timezone ของเซิร์ฟเวอร์ */
+function parseBkk(s) {
+  if (!s) return null;
+  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (m) return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] || '00'}+07:00`);
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function normWarning(x) {
+  return {
+    title: String(x.TitleThai || x.TitleEnglish || '').trim(),
+    titleEn: String(x.TitleEnglish || '').trim(),
+    datetime: x.AnnounceDate || x.AnnounceDateTime || null,
+    desc: String(x.DescriptionThai || x.HeadlineThai || x.DescriptionEnglish || '')
+      .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+    url: x.WebUrlThai || x.DocumentFile || null,
+    effectStart: x.EffectStartDate || null,
+    effectEnd: x.EffectEndDate || null,
+  };
+}
+
+// แสดงเฉพาะประกาศที่อัปเดตภายใน 7 วันล่าสุด — ถ้าไม่มี ให้เว้นว่าง
+const WARN_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+
+async function fetchWarningsFrom(path, field) {
+  const j = await getJson(path);
+  const raw = arr(j[field]);
+  if (j.Warnings) raw.push(...arr(j.Warnings.Warning || j.Warnings));
+  const list = raw.filter((x) => x && typeof x === 'object' && (x.TitleThai || x.TitleEnglish));
+  return { list, lastBuildDate: (j.header && j.header.lastBuildDate) || null };
+}
+
 async function fetchWarnings() {
-  const j = await getJson('WeatherWarningNews/v1/');
-  const w = j.WarningNews;
-  if (!w) return { warnings: [], lastBuildDate: (j.header && j.header.lastBuildDate) || null };
-  const list = arr(w).map((x) => ({
-    title: x.TitleThai || x.TitleEnglish || '',
-    titleEn: x.TitleEnglish || '',
-    datetime: x.AnnounceDateTime || null,
-    desc: (x.DescriptionThai || '').replace(/<[^>]+>/g, ' ').trim(),
-  }));
-  return { warnings: list, lastBuildDate: (j.header && j.header.lastBuildDate) || null };
+  let list = [];
+  let lastBuildDate = null;
+  // v2 = feed ปัจจุบันของกรมอุตุ (มีประกาศล่าสุด) · v1 = fallback (feed เก่าค้างปี 2022)
+  try {
+    const r = await fetchWarningsFrom('WeatherWarningNews/v2/', 'Warning');
+    list = r.list;
+    lastBuildDate = r.lastBuildDate;
+  } catch (e) { /* ต่อ fallback v1 ด้านล่าง */ }
+  if (!list.length) {
+    try {
+      const r = await fetchWarningsFrom('WeatherWarningNews/v1/', 'WarningNews');
+      list = r.list;
+      lastBuildDate = r.lastBuildDate || lastBuildDate;
+    } catch (e) { /* ไม่มีประกาศก็ถือว่าว่าง */ }
+  }
+  const now = Date.now();
+  const warnings = list.map(normWarning).filter((w) => {
+    const dt = parseBkk(w.datetime);
+    if (!dt) return false;
+    const age = now - dt.getTime();
+    return age <= WARN_MAX_AGE_MS && age >= -6 * 3600 * 1000;
+  });
+  return { warnings, lastBuildDate };
 }
 
 module.exports = { fetchStations3h, fetchDailyRegions, fetchToday, fetchWarnings, distKm };
