@@ -153,16 +153,18 @@ function computeMetrics() {
         break;
       }
     }
-    // ฝนสะสมวันนี้ (รีเซ็ตเที่ยงคืนเวลาไทย — ไม่รวมแถวพยากรณ์อนาคต)
+    // ฝนสะสม = เฉพาะข้อมูลจริง (archive) ไม่รวม forecast (archive มี latency ~1 วัน ชั่วโมงที่ยังไม่มี archive จะ fallback forecast)
+    const realSeries = series.filter((p) => p.src !== 'forecast');
+    // ฝนสะสมวันนี้ (รีเซ็ตเที่ยงคืนเวลาไทย)
     const today = nowIct.slice(0, 10);
     let todaySum = 0;
-    for (const p of series) {
+    for (const p of realSeries) {
       if (p.t > nowIct) break;
       if (p.t.slice(0, 10) === today) todaySum += p.mm;
     }
     m.rainToday = Math.round(todaySum * 10) / 10;
-    m.rain24h = sumRange(series, now - 24 * 3600000);
-    m.rain7d = sumRange(series, now - 7 * 86400000);
+    m.rain24h = sumRange(realSeries, now - 24 * 3600000);
+    m.rain7d = sumRange(realSeries, now - 7 * 86400000);
   }
   if (cache.stations && cache.stations.stations.length) {
     const withRain = cache.stations.stations.filter((s) => s.rain24h !== null && s.rain24h !== undefined);
