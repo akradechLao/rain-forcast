@@ -68,6 +68,28 @@ const hasChart = typeof Chart !== 'undefined';
 const hasDataLabels = typeof ChartDataLabels !== 'undefined';
 const hasLeaflet = typeof L !== 'undefined';
 
+// ตัวเลขชิดเกือบปลายแท่งด้านใน: สีเข้มเมื่อตัวเลขอยู่เต็มในแท่ง (อ่านง่าย) ไม่เช่นนั้นสีขาวให้เห็นชัดบนพื้นมืด
+function numFitsOnBar(ctx, axis) {
+  const v = Number(ctx.dataset.data[ctx.dataIndex]);
+  const ch = ctx.chart.chartArea;
+  const scale = ctx.chart.scales[axis];
+  if (!ch || !scale || !(scale.max > 0) || !(v > 0)) return false;
+  const span = axis === 'y' ? ch.height : ch.width;
+  if ((v / scale.max) * span < (axis === 'y' ? 16 : 44)) return false;
+  if (axis === 'y') {
+    const n = (ctx.chart.data.labels || []).length || 1;
+    return ch.width / n >= 24;
+  }
+  return true;
+}
+const barNumColor = (ctx, axis) => (numFitsOnBar(ctx, axis) ? '#0f172a' : '#ffffff');
+
+// ?days=1 เปิดลิงก์มุมมองชั่วโมงตามจำนวนวันที่ต้องการได้โดยตรง (share link)
+{
+  const daysQ = Number(new URLSearchParams(location.search).get('days'));
+  if (daysQ >= 1 && daysQ <= 3650) state.days = daysQ;
+}
+
 const THEME_KEY = 'dashboardTheme';
 function currentTheme() {
   try {
@@ -126,6 +148,8 @@ function bindUI() {
   $('#btnTestNotify').addEventListener('click', testNotify);
   $('#btnRadarPlay').addEventListener('click', toggleCapiPlay);
   $('#toggleRadar').addEventListener('change', toggleRadarLayer);
+  const daysInitBtn = $(`#rangeSwitch .btn[data-days="${state.days}"]`);
+  if (daysInitBtn) $$('#rangeSwitch .btn').forEach((x) => x.classList.toggle('active', x === daysInitBtn));
   $$('#rangeSwitch .btn').forEach((b) => b.addEventListener('click', () => {
     $$('#rangeSwitch .btn').forEach((x) => x.classList.remove('active'));
     b.classList.add('active');
@@ -291,6 +315,7 @@ async function loadSeries() {
 }
 
 function labelFor(t) {
+  if (state.days === 1) return t.slice(11, 16);
   const day = t.slice(5, 10).replace('-', '/');
   const hh = t.slice(11, 16);
   return state.days <= 7 ? `${day} ${hh}` : day;
@@ -300,11 +325,14 @@ function renderHourlyChart(data) {
   if (!hasChart) return;
   const rows = data.hourly;
   const labels = rows.map((r) => labelFor(r.t));
+  // มุมมอง 1 วัน: แสดงตัวเลขบนแท่ง (ฝนรายชั่วโมง) กดปุ่มอื่นกลับเป็นกราฟเปล่าไม่ให้รก
+  const oneDay = state.days === 1 && hasDataLabels;
   // ระบายสีตามเวลาจริง (ผ่าน now = ย้อนหลัง/ปัจจุบัน, อนาคต = พยากรณ์) ไม่พึ่ง src ของแหล่งข้อมูล
   const nowMs = Date.now();
   const barColors = rows.map((r) => (new Date(r.t).getTime() > nowMs ? 'rgba(129,140,248,0.75)' : 'rgba(56,189,248,0.8)'));
   const cfg = {
     type: 'bar',
+    ...(oneDay ? { plugins: [ChartDataLabels] } : {}),
     data: {
       labels,
       datasets: [
@@ -346,12 +374,25 @@ function renderHourlyChart(data) {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
+      ...(oneDay ? { layout: { padding: { top: 4 } } } : {}),
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y} มม.` } },
+        ...(oneDay ? {
+          datalabels: {
+            display: (ctx) => ctx.datasetIndex === 0 && Number(ctx.dataset.data[ctx.dataIndex]) > 0,
+            anchor: 'end',
+            align: 'start',
+            clamp: true,
+            offset: 3,
+            color: (ctx) => barNumColor(ctx, 'y'),
+            font: { size: 10, weight: '700' },
+            formatter: (v) => (v >= 10 ? String(Math.round(v)) : Number(v).toFixed(1)),
+          },
+        } : {}),
       },
       scales: {
-        x: { ticks: { maxTicksLimit: state.days <= 7 ? 16 : 12, maxRotation: 0, font: { size: 10 } } },
+        x: { ticks: { maxTicksLimit: state.days === 1 ? 25 : state.days <= 7 ? 16 : 12, maxRotation: 0, font: { size: 10 } } },
         y: { beginAtZero: true, title: { display: true, text: 'มม./ชม.' } },
         y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'สะสม' } },
       },
@@ -384,17 +425,17 @@ function renderDailyChart(data) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: { padding: { top: 14 } },
+      layout: { padding: { top: 4 } },
       plugins: {
         legend: { labels: { boxWidth: 12, font: { size: 11 } } },
         ...(hasDataLabels ? {
           datalabels: {
             display: 'auto',
             anchor: 'end',
-            align: 'end',
+            align: 'start',
             clamp: true,
-            offset: 2,
-            color: '#ffffff',
+            offset: 3,
+            color: (ctx) => barNumColor(ctx, 'y'),
             font: { size: 10, weight: '700' },
             formatter: (v) => (v >= 10 ? String(Math.round(v)) : (v === 0 ? '0' : Number(v).toFixed(1))),
           },
@@ -497,7 +538,7 @@ function upsertChart(id, cfg) {
   if (state.charts[id]) {
     state.charts[id].data = cfg.data;
     state.charts[id].options = cfg.options;
-    if (cfg.plugins) state.charts[id].config.plugins = cfg.plugins;
+    state.charts[id].config.plugins = cfg.plugins || [];
     state.charts[id].update('none');
   } else {
     state.charts[id] = new Chart(canvas.getContext('2d'), cfg);
@@ -595,10 +636,10 @@ function renderStationsChart(data) {
           datalabels: {
             display: 'auto',
             anchor: 'end',
-            align: 'end',
+            align: (ctx) => (numFitsOnBar(ctx, 'x') ? 'start' : 'end'),
             clamp: true,
-            offset: 2,
-            color: '#ffffff',
+            offset: 3,
+            color: (ctx) => barNumColor(ctx, 'x'),
             font: { size: 11, weight: '700' },
             formatter: (v) => String(Math.round(v * 10) / 10),
           },

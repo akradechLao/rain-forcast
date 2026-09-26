@@ -354,7 +354,11 @@ async function handleApi(req, res, url) {
     const days = Math.min(3650, Math.max(1, Number(url.searchParams.get('days')) || 14));
     const all = openmeteo.readHourly();
     const nowMs = Date.now();
-    const windowed = all.filter((x) => new Date(x.t).getTime() >= nowMs - days * 86400000);
+    // 1 วัน = ปฏิทินวันนี้ตามเวลาไทย (00:00–23:59) ไม่เช่นนั้นจะเหมาวันพยากรณ์ทั้งหมดมาด้วย (ช่วงอื่นยังเหมาเหมือนเดิม)
+    const nowIctDay = new Date().toLocaleString('sv', { timeZone: 'Asia/Bangkok' }).slice(0, 10);
+    const windowed = days === 1
+      ? all.filter((x) => x.t.slice(0, 10) === nowIctDay)
+      : all.filter((x) => new Date(x.t).getTime() >= nowMs - days * 86400000);
     // ฝนสะสมรายวัน (reset เที่ยงคืนเวลาไทย) + ฝน 24 ชม.ย้อนหลัง (moving)
     // คำนวณจากชุดเต็มก่อนตัดหน้าต่าง เพื่อไม่ให้แถวแรกของช่วงขาดข้อมูลก่อนหน้า
     const times = all.map((r) => new Date(r.t).getTime());
