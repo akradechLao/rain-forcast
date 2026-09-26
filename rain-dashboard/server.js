@@ -153,10 +153,10 @@ function computeMetrics() {
         break;
       }
     }
-    // ฝนสะสม = เฉพาะข้อมูลจริง (archive) ไม่รวม forecast (archive มี latency ~1 วัน ชั่วโมงที่ยังไม่มี archive จะ fallback forecast)
-    const realSeries = series.filter((p) => p.src !== 'forecast');
-    // ฝนสะสมวันนี้ (รีเซ็ตเที่ยงคืนเวลาไทย)
+    // ฝนสะสม = forecast วันนี้ยอมรับได้ (archive มี latency ~1 วัน) / forecast วันก่อนหน้ากรองออก (archive ควรมีแล้ว)
     const today = nowIct.slice(0, 10);
+    const realSeries = series.filter((p) => p.src !== 'forecast' || p.t.slice(0, 10) === today);
+    // ฝนสะสมวันนี้ (รีเซ็ตเที่ยงคืนเวลาไทย)
     let todaySum = 0;
     for (const p of realSeries) {
       if (p.t > nowIct) break;
