@@ -2,6 +2,7 @@
 const config = require('../config');
 const store = require('../store');
 
+const TZ = 'Asia/Bangkok';
 const REAL_FILE = 'internal-rain.jsonl';
 const DEMO_FILE = 'internal-demo.jsonl';
 
@@ -19,6 +20,19 @@ function toNumber(v) {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+/** แปลง timestamp string → epoch ms โดยถ้าไม่มี timezone suffix ให้ตีเป็น ICT (+07:00) */
+function ictParse(ts) {
+  if (!ts) return NaN;
+  const s = String(ts);
+  const withTz = /[Zz]|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + '+07:00';
+  return Date.parse(withTz);
+}
+
+/** แปลง Date → ICT string (YYYY-MM-DDTHH:MM) สำหรับเก็บในไฟล์ */
+function toIct(ts) {
+  return ts.toLocaleString('sv', { timeZone: TZ }).slice(0, 16).replace(' ', 'T');
 }
 
 let lastCumulative = null;
@@ -47,7 +61,7 @@ function recordReading({ mm, timestamp, source = 'http', stationId = 'park-gauge
   delta = Math.max(0, Math.round(delta * 100) / 100);
 
   const rec = {
-    t: ts.toISOString(),
+    t: toIct(ts),
     mm: delta,
     stationId,
     source,
@@ -78,7 +92,7 @@ function ensureDemo() {
   };
   for (let t = start; t <= now; t += 600000) { // ทุก 10 นาที
     const d = new Date(t);
-    const hour = d.getHours();
+    const hour = Number(d.toLocaleString('sv', { timeZone: TZ }).slice(11, 13));
     const storm = rand();
     let mm = 0;
     if (hour >= 13 && hour <= 21 && storm > 0.62) {
@@ -114,10 +128,10 @@ function summarise(rows) {
   const now = Date.now();
   const sumSince = (ms) => {
     const from = now - ms;
-    return Math.round(rows.filter((r) => new Date(r.t).getTime() >= from).reduce((s, r) => s + r.mm, 0) * 10) / 10;
+    return Math.round(rows.filter((r) => ictParse(r.t) >= from).reduce((s, r) => s + r.mm, 0) * 10) / 10;
   };
   const last = rows[rows.length - 1];
-  const lastAt = last ? new Date(last.t).getTime() : null;
+  const lastAt = last ? ictParse(last.t) : null;
   const hourly = hourlyAggregate(rows);
   const lastHour = hourly.length ? hourly[hourly.length - 1].mm : 0;
   return {
@@ -143,7 +157,7 @@ function readHistory({ days = 7 } = {}) {
     demo = false;
   }
   const from = Date.now() - days * 86400000;
-  const filtered = rows.filter((r) => new Date(r.t).getTime() >= from);
+  const filtered = rows.filter((r) => ictParse(r.t) >= from);
   return { ...summarise(filtered), demo, hourly: hourlyAggregate(filtered), readings: filtered.length };
 }
 

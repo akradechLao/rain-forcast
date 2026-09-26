@@ -12,6 +12,14 @@ function pad(n) { return String(n).padStart(2, '0'); }
 function fmtDate(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+/** วันที่ปัจจุบันแบบ ICT (YYYY-MM-DD) */
+function nowIctDate() {
+  return new Date().toLocaleString('sv', { timeZone: TZ }).slice(0, 10);
+}
+/** บวก/ลบ วัน จาก YYYY-MM-DD string */
+function addDays(dateStr, days) {
+  return new Date(Date.parse(dateStr) + days * 86400000).toISOString().slice(0, 10);
+}
 
 async function getJson(url, timeoutMs = 30000, retries = 3) {
   let lastErr;
@@ -43,16 +51,12 @@ function hourlyToMap(hourly) {
   return map;
 }
 
-async function fetchArchive(daysBack = 10, anchorMs = Date.now()) {
-  // Open-Meteo archive มี latency ~1 วัน — end_date ห้ามเกิน "วันก่อนวันนี้" (HTTP 400)
-  let end = new Date(anchorMs);
-  const maxEnd = new Date();
-  maxEnd.setHours(0, 0, 0, 0);
-  maxEnd.setDate(maxEnd.getDate() - 1);
-  if (end.getTime() > maxEnd.getTime()) end = maxEnd;
-  const start = new Date(end.getTime() - daysBack * 86400000);
+async function fetchArchive(daysBack = 10) {
+  // Open-Meteo archive มี latency ~1 วัน — end_date ห้ามเกิน "วันก่อนวันนี้ ตามเวลาไทย" (HTTP 400)
+  const end = addDays(nowIctDate(), -1);
+  const start = addDays(end, -daysBack);
   const url = `${ARCHIVE}?latitude=${config.park.lat}&longitude=${config.park.lon}` +
-    `&start_date=${fmtDate(start)}&end_date=${fmtDate(end)}` +
+    `&start_date=${start}&end_date=${end}` +
     `&hourly=precipitation&timezone=${encodeURIComponent(TZ)}`;
   const j = await getJson(url);
   return hourlyToMap(j.hourly);
@@ -117,7 +121,7 @@ async function refresh() {
   ]);
   const series = mergeSeries(archiveMap, forecastMap);
   const daily = toDaily(series);
-  const year = String(new Date().getFullYear());
+  const year = nowIctDate().slice(0, 4);
   const name = `hourly-${year}.jsonl`;
 
   await store.withLock(name, () => {
@@ -137,7 +141,7 @@ async function refresh() {
     if (added > 0 || existing.length !== byTime.size) {
       const rows = [...byTime.values()].sort((a, b) => (a.t < b.t ? -1 : 1));
       // เก็บย้อนหลัง 10 ปี (รองรับกราฟย้อนหลัง 5 ปี + เผื่อโต)
-      const cutoff = fmtDate(new Date(Date.now() - 10 * 365 * 86400000)) + 'T00:00';
+      const cutoff = addDays(nowIctDate(), -10 * 365) + 'T00:00';
       const kept = rows.filter((r) => r.t >= cutoff);
       store.writeJson(name.replace('.jsonl', '.json'), kept);
     }

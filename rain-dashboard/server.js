@@ -360,10 +360,10 @@ async function handleApi(req, res, url) {
     const nowIctDay = new Date().toLocaleString('sv', { timeZone: 'Asia/Bangkok' }).slice(0, 10);
     const windowed = days === 1
       ? all.filter((x) => x.t.slice(0, 10) === nowIctDay)
-      : all.filter((x) => new Date(x.t).getTime() >= nowMs - days * 86400000);
+      : all.filter((x) => parseIct(x.t) >= nowMs - days * 86400000);
     // ฝนสะสมรายวัน (reset เที่ยงคืนเวลาไทย) + ฝน 24 ชม.ย้อนหลัง (moving)
     // คำนวณจากชุดเต็มก่อนตัดหน้าต่าง เพื่อไม่ให้แถวแรกของช่วงขาดข้อมูลก่อนหน้า
-    const times = all.map((r) => new Date(r.t).getTime());
+    const times = all.map((r) => parseIct(r.t));
     const cumDayByT = new Map();
     const rollByT = new Map();
     let dayKey = null;
