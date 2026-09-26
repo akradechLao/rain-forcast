@@ -786,26 +786,38 @@ function renderWaterChart(data) {
   const unit = data.unit || 'ระดับ';
   const levels = data.levels || {};
   const rows = data.series || [];
-  const labels = rows.map((r) => {
+  // ยืดแกน x ไปถึงเวลาปัจจุบันเสมอ (ถ้าข้อมูลล่าสุดค้างเกิน 10 นาที จะเพิ่มจุด dummy ต่อท้าย)
+  const seriesRows = [...rows];
+  if (seriesRows.length) {
+    const lastTs = new Date(seriesRows[seriesRows.length - 1].t).getTime();
+    const now = Date.now();
+    if (now - lastTs > 10 * 60000) {
+      const lastLevel = seriesRows[seriesRows.length - 1].level;
+      const nowIct = new Date(now + 7 * 3600000);
+      const nowStr = `${nowIct.getUTCFullYear()}-${String(nowIct.getUTCMonth() + 1).padStart(2, '0')}-${String(nowIct.getUTCDate()).padStart(2, '0')}T${String(nowIct.getUTCHours()).padStart(2, '0')}:${String(nowIct.getUTCMinutes()).padStart(2, '0')}:00`;
+      seriesRows.push({ t: nowStr, level: lastLevel });
+    }
+  }
+  const labels = seriesRows.map((r) => {
     const d = new Date(r.t);
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   });
   const datasets = [
     {
       label: 'ระดับน้ำ',
-      data: rows.map((r) => r.level),
+      data: seriesRows.map((r) => r.level),
       borderColor: '#38bdf8',
       backgroundColor: 'rgba(56,189,248,0.15)',
       fill: true,
       tension: 0.3,
-      pointRadius: rows.length > 60 ? 0 : 2,
+      pointRadius: seriesRows.length > 60 ? 0 : 2,
       borderWidth: 2,
     },
   ];
   if (data.warnLevel !== null && data.warnLevel !== undefined) {
     datasets.push({
       label: `เกณฑ์เตือน (ระดับ ${data.warnLevel})`,
-      data: rows.map(() => data.warnLevel),
+      data: seriesRows.map(() => data.warnLevel),
       borderColor: '#f87171',
       borderDash: [6, 6],
       borderWidth: 1.5,
