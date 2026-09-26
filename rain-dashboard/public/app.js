@@ -535,14 +535,21 @@ function renderCumDailyChart(data) {
 function upsertChart(id, cfg) {
   const canvas = document.getElementById(id);
   if (!canvas) return;
-  if (state.charts[id]) {
-    state.charts[id].data = cfg.data;
-    state.charts[id].options = cfg.options;
-    state.charts[id].config.plugins = cfg.plugins || [];
-    state.charts[id].update('none');
-  } else {
-    state.charts[id] = new Chart(canvas.getContext('2d'), cfg);
+  const old = state.charts[id];
+  if (old) {
+    // config.plugins ของ Chart.js เป็น getter อ่านอย่างเดียว — แก้ด้วยการสร้าง chart ใหม่เมื่อชุด plugin เปลี่ยน
+    const want = cfg.plugins || [];
+    const have = old.config.plugins || [];
+    const same = have.length === want.length && want.every((p, i) => have[i] === p);
+    if (same) {
+      old.data = cfg.data;
+      old.options = cfg.options;
+      old.update('none');
+      return;
+    }
+    old.destroy();
   }
+  state.charts[id] = new Chart(canvas.getContext('2d'), cfg);
 }
 
 // ---------------- stations ----------------
