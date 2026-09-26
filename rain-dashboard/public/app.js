@@ -65,6 +65,7 @@ const state = {
 };
 
 const hasChart = typeof Chart !== 'undefined';
+const hasDataLabels = typeof ChartDataLabels !== 'undefined';
 const hasLeaflet = typeof L !== 'undefined';
 
 const THEME_KEY = 'dashboardTheme';
@@ -368,19 +369,37 @@ function renderDailyChart(data) {
     internalByDay[d] = (internalByDay[d] || 0) + h.mm;
   }
   const labels = grid.map((g) => g.day.slice(5).replace('-', '/'));
+  const internalSeries = grid.map((g) => Math.round((internalByDay[g.day] || 0) * 10) / 10);
+  const datasets = [
+    { label: 'พื้นที่สวนฯ (Open-Meteo)', data: grid.map((g) => g.mm), backgroundColor: 'rgba(56,189,248,0.8)', borderRadius: 3 },
+  ];
+  // เซนเซอร์ภายใน: แสดงเฉพาะข้อมูลจริง (โหมดเดโม่/ยังไม่มีข้อมูลจะไม่โผล่ในกราฟ)
+  if (!data.internal.demo && internalSeries.some((v) => v > 0)) {
+    datasets.push({ label: `เซนเซอร์ภายใน${data.internal.demo ? ' (จำลอง)' : ''}`, data: internalSeries, backgroundColor: 'rgba(251,191,36,0.8)', borderRadius: 3 });
+  }
   const cfg = {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label: 'พื้นที่สวนฯ (Open-Meteo)', data: grid.map((g) => g.mm), backgroundColor: 'rgba(56,189,248,0.8)', borderRadius: 3 },
-        { label: `เซนเซอร์ภายใน${data.internal.demo ? ' (จำลอง)' : ''}`, data: grid.map((g) => Math.round((internalByDay[g.day] || 0) * 10) / 10), backgroundColor: 'rgba(251,191,36,0.8)', borderRadius: 3 },
-      ],
-    },
+    ...(hasDataLabels ? { plugins: [ChartDataLabels] } : {}),
+    data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { labels: { boxWidth: 12, font: { size: 11 } } } },
+      layout: { padding: { top: 14 } },
+      plugins: {
+        legend: { labels: { boxWidth: 12, font: { size: 11 } } },
+        ...(hasDataLabels ? {
+          datalabels: {
+            display: 'auto',
+            anchor: 'end',
+            align: 'end',
+            clamp: true,
+            offset: 2,
+            color: '#c7d2e5',
+            font: { size: 9 },
+            formatter: (v) => (v >= 10 ? String(Math.round(v)) : (v === 0 ? '0' : Number(v).toFixed(1))),
+          },
+        } : {}),
+      },
       scales: {
         x: { stacked: false, ticks: { font: { size: 10 } } },
         y: { beginAtZero: true, title: { display: true, text: 'มม./วัน' } },
@@ -478,6 +497,7 @@ function upsertChart(id, cfg) {
   if (state.charts[id]) {
     state.charts[id].data = cfg.data;
     state.charts[id].options = cfg.options;
+    if (cfg.plugins) state.charts[id].config.plugins = cfg.plugins;
     state.charts[id].update('none');
   } else {
     state.charts[id] = new Chart(canvas.getContext('2d'), cfg);
@@ -554,6 +574,7 @@ function renderStationsChart(data) {
   const st = data.stations.filter((s) => s.rain24h !== null && s.rain24h !== undefined).slice(0, 10);
   const cfg = {
     type: 'bar',
+    ...(hasDataLabels ? { plugins: [ChartDataLabels] } : {}),
     data: {
       labels: st.map((s) => `${s.nameEn || s.nameTh} (${s.distKm ?? '-'} กม.)`),
       datasets: [{
@@ -567,8 +588,23 @@ function renderStationsChart(data) {
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { x: { beginAtZero: true } },
+      layout: { padding: { right: 36 } },
+      plugins: {
+        legend: { display: false },
+        ...(hasDataLabels ? {
+          datalabels: {
+            display: 'auto',
+            anchor: 'end',
+            align: 'end',
+            clamp: true,
+            offset: 2,
+            color: '#dbe5f4',
+            font: { size: 10, weight: '600' },
+            formatter: (v) => String(Math.round(v * 10) / 10),
+          },
+        } : {}),
+      },
+      scales: { x: { beginAtZero: true, suggestedMax: Math.max(...st.map((s) => s.rain24h), 0) * 1.16 || undefined } },
     },
   };
   upsertChart('chartStations', cfg);

@@ -145,6 +145,74 @@ section { margin-bottom: 16px; }
   .topbar h1 { font-size: 15px; }
 }
 
+/* ===== มือถือ (<= 640px) ===== */
+@media (max-width: 640px) {
+  html, body { font-size: 14px; }
+  .container { padding: 10px 10px 32px; }
+  section { margin-bottom: 12px; }
+
+  .topbar { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  .brand { gap: 8px; min-width: 0; }
+  .brand-icon { font-size: 22px; }
+  .topbar h1 { font-size: 14px; }
+  .topbar .sub { font-size: 11px; }
+  .top-right { width: 100%; justify-content: space-between; gap: 8px; }
+  .clock { font-size: 18px; }
+  .refresh-info { font-size: 11px; }
+  .btn { padding: 7px 11px; font-size: 13px; }
+  .btn-sm { padding: 5px 8px; font-size: 12px; }
+
+  .alert-banner { flex-wrap: wrap; gap: 8px; padding: 8px 12px; font-size: 13px; }
+  .alert-banner .btn { margin-left: 0; }
+
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .kpi { padding: 10px 11px; }
+  .kpi-label { min-height: 0; font-size: 11.5px; }
+  .kpi-value { font-size: 26px; }
+  .kpi-value small { font-size: 11.5px; }
+  .kpi-note { font-size: 10.5px; }
+
+  .card { padding: 11px 12px; border-radius: 12px; }
+  .card h2 { font-size: 14px; }
+  .card-head { gap: 6px; }
+
+  .chart-wrap { height: 215px; }
+  .chart-wrap.tall { height: 250px; }
+  #map, .radar-frame { height: 300px; }
+
+  table { font-size: 12.5px; }
+  th, td { padding: 6px; }
+  .table-wrap { max-height: 300px; }
+
+  .source-row { flex-wrap: wrap; gap: 4px 8px; }
+  .source-name { min-width: 0; font-size: 12.5px; }
+  .source-meta { font-size: 11.5px; }
+
+  .rule-row { grid-template-columns: 22px minmax(0, 1fr) 62px 42px 52px; gap: 5px; padding: 6px; font-size: 12px; }
+  .rule-row input[type="text"], .rule-row input[type="number"] { padding: 4px 5px; font-size: 12px; }
+  .channel-row { flex-wrap: wrap; gap: 6px; }
+  .channel-row .ch-name { min-width: 0; }
+  .hint, .hint-inline { font-size: 11.5px; }
+  code { word-break: break-all; }
+
+  /* หน้าฝนแล้ง */
+  .drought-hero { padding: 13px 14px; gap: 12px; }
+  .hero-badge { font-size: 16px; padding: 9px 13px; }
+  .hero-title { font-size: 14.5px; }
+  .hero-desc { font-size: 12.5px; }
+  .hero-spi { min-width: 0; }
+  .hero-spi-value { font-size: 34px; }
+}
+
+/* ===== มือถือจอเล็ก (<= 420px) ===== */
+@media (max-width: 420px) {
+  .kpi-value { font-size: 23px; }
+  .clock { font-size: 16px; }
+  .topbar h1 { font-size: 13px; }
+  .chart-wrap.tall { height: 230px; }
+  .hero-spi-value { font-size: 30px; }
+}
+
 .card {
   background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%);
   border: 1px solid var(--line);
